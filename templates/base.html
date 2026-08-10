@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+
+        {% block title %}
+        Owner Acquisition CRM
+        {% endblock %}
+
+    </title>
+
+
+    <!-- =========================
+         BOOTSTRAP
+    ========================== -->
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+
+    <!-- =========================
+         BOOTSTRAP ICONS
+    ========================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    >
+
+
+    <!-- =========================
+         CUSTOM CSS
+    ========================== -->
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+    <!-- =========================
+         USER MENU
+    ========================== -->
+
+    <div class="user-menu">
+
+
+        <button
+            id="menuButton"
+            type="button"
+            class="menu-button"
+            aria-label="Open menu"
+        >
+
+            <i class="bi bi-list"></i>
+
+        </button>
+
+
+        <div
+            id="userDropdown"
+            class="user-dropdown"
+        >
+
+
+            <!-- USER INFO -->
+
+            <div class="user-info">
+
+
+                <div class="user-avatar">
+
+                    <i class="bi bi-person-fill"></i>
+
+                </div>
+
+
+                <div>
+
+                    <strong>
+
+                        {{ session.get("username", "User") }}
+
+                    </strong>
+
+
+                    <small>
+
+                        Account
+
+                    </small>
+
+                </div>
+
+
+            </div>
+
+
+            <hr>
+
+
+            <!-- LOG OUT -->
+
+            <a
+                href="/logout"
+                class="logout-button"
+            >
+
+                <i class="bi bi-box-arrow-right"></i>
+
+                Log out
+
+            </a>
+
+
+        </div>
+
+
+    </div>
+
+
+    <!-- =========================
+         MAIN CONTENT
+    ========================== -->
+
+    <main class="container py-4">
+
+        {% block content %}
+
+        {% endblock %}
+
+    </main>
+
+    <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
+    </script>
+
+    <!-- =========================
+         USER MENU JAVASCRIPT
+    ========================== -->
+
+    <script>
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            function () {
+
+
+                const button =
+                    document.getElementById("menuButton");
+
+
+                const dropdown =
+                    document.getElementById("userDropdown");
+
+
+                button.addEventListener(
+                    "click",
+                    function () {
+
+                        dropdown.classList.toggle("show");
+
+                    }
+                );
+
+
+                // Close menu when clicking outside
+
+                document.addEventListener(
+                    "click",
+                    function (event) {
+
+
+                        if (
+                            !button.contains(event.target) &&
+                            !dropdown.contains(event.target)
+                        ) {
+
+                            dropdown.classList.remove("show");
+
+                        }
+
+                    }
+                );
+
+
+            }
+        );
+
+    </script>
+
+
+</body>
+
+</html>

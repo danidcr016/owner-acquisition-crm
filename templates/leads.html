@@ -1,0 +1,781 @@
+{% extends "base.html" %}
+
+{% block title %}
+Leads - Owner Acquisition CRM
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div>
+
+        <h1>
+            <i class="bi bi-people-fill"></i>
+            Leads
+        </h1>
+
+        <p class="text-muted mb-0">
+            Gestiona todos los propietarios.
+        </p>
+
+    </div>
+
+
+    <div>
+
+        <a
+            href="/"
+            class="btn btn-secondary"
+        >
+            <i class="bi bi-house-fill"></i>
+            Dashboard
+        </a>
+
+
+        <a
+            href="/add-lead"
+            class="btn btn-primary"
+        >
+            <i class="bi bi-person-plus-fill"></i>
+            Nuevo Lead
+        </a>
+
+    </div>
+
+</div>
+
+<!-- =========================
+     SEARCH + FILTERS
+========================== -->
+
+<div class="card shadow-sm mb-4">
+
+<div class="card-body">
+
+    <form
+        method="GET"
+        action="/leads"
+    >
+
+        <div class="row g-3 align-items-end">
+
+
+            <!-- SEARCH -->
+
+            <div class="col-md-6">
+
+                <label
+                    for="search"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-search"></i>
+
+                    Buscar por nombre
+
+                </label>
+
+
+                <input
+                    type="text"
+                    id="search"
+                    name="search"
+                    class="form-control"
+                    placeholder="Ej. John Smith"
+                    value="{{ search }}"
+                >
+
+            </div>
+
+
+            <!-- STATUS FILTER -->
+
+            <div class="col-md-4">
+
+                <label
+                    for="status"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-funnel-fill"></i>
+
+                    Estado
+
+                </label>
+
+
+                <select
+                    id="status"
+                    name="status"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        Todos
+                    </option>
+
+
+                    <option
+                        value="NEW"
+                        {% if status_filter == "NEW" %}selected{% endif %}
+                    >
+                        New
+                    </option>
+
+
+                    <option
+                        value="CONTACTED"
+                        {% if status_filter == "CONTACTED" %}selected{% endif %}
+                    >
+                        Contacted
+                    </option>
+
+
+                    <option
+                        value="INTERESTED"
+                        {% if status_filter == "INTERESTED" %}selected{% endif %}
+                    >
+                        Interested
+                    </option>
+
+
+                    <option
+                        value="ONBOARDING"
+                        {% if status_filter == "ONBOARDING" %}selected{% endif %}
+                    >
+                        Onboarding
+                    </option>
+
+
+                    <option
+                        value="ACTIVE"
+                        {% if status_filter == "ACTIVE" %}selected{% endif %}
+                    >
+                        Active
+                    </option>
+
+
+                    <option
+                        value="LOST"
+                        {% if status_filter == "LOST" %}selected{% endif %}
+                    >
+                        Lost
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- BUTTONS -->
+
+            <div class="col-md-2 d-flex gap-2">
+
+                <button
+                    type="submit"
+                    class="btn btn-primary w-100"
+                >
+
+                    <i class="bi bi-search"></i>
+
+                    Buscar
+
+                </button>
+
+
+                <a
+                    href="/leads"
+                    class="btn btn-outline-secondary"
+                >
+
+                    ✕
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </form>
+
+</div>
+
+</div>
+
+<!-- =========================
+     RESULTS
+========================== -->
+
+<div class="card shadow">
+
+<div class="card-body">
+
+
+    {% if leads %}
+
+
+    <div class="d-flex justify-content-between mb-3">
+
+        <span class="text-muted">
+
+            Mostrando
+
+            <strong>
+                {{ leads|length }}
+            </strong>
+
+            leads
+
+        </span>
+
+
+        {% if search or status_filter %}
+
+            <span class="badge bg-primary">
+
+                Filtro activo
+
+            </span>
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- =========================
+         TABLE
+    ========================== -->
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle">
+
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        ID
+                    </th>
+
+                    <th>
+                        Nombre
+                    </th>
+
+                    <th>
+                        Teléfono
+                    </th>
+
+                    <th>
+                        Email
+                    </th>
+
+                    <th>
+                        Ciudad
+                    </th>
+
+                    <th>
+                        Fuente
+                    </th>
+
+                    <th>
+                        Creado
+                    </th>
+
+                    <th>
+                        Estado
+                    </th>
+
+                    <th>
+                        Notas
+                    </th>
+
+                    <th class="text-center">
+                        Acciones
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+
+                {% for lead in leads %}
+
+
+                <tr>
+
+
+                    <!-- ID -->
+
+                    <td>
+                        {{ lead.id }}
+                    </td>
+
+
+                    <!-- NAME -->
+
+                    <td>
+
+                        <strong>
+                            {{ lead.name }}
+                        </strong>
+
+                    </td>
+
+
+                    <!-- PHONE -->
+
+                    <td class="text-nowrap">
+                        {{ lead.phone }}
+                    </td>
+
+
+                    <!-- EMAIL -->
+
+                    <td class="text-nowrap">
+                        {{ lead.email }}
+                    </td>
+
+
+                    <!-- CITY -->
+
+                    <td class="text-nowrap">
+                        {{ lead.city }}
+                    </td>
+
+
+                    <!-- SOURCE -->
+
+                    <td class="text-nowrap">
+                        {{ lead.source }}
+                    </td>
+
+
+                    <!-- CREATED -->
+
+                    <td>
+
+                        {% if lead.created_at %}
+
+                            {{ lead.created_at.strftime("%d/%m/%Y %H:%M") }}
+
+                        {% else %}
+
+                            <span class="text-muted">
+                                —
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- STATUS -->
+
+                    <td>
+
+                        {% if lead.status == "NEW" %}
+
+                            <span class="badge bg-secondary">
+
+                                <i class="bi bi-person-fill-add"></i>
+
+                                New
+
+                            </span>
+
+
+                        {% elif lead.status == "CONTACTED" %}
+
+                            <span class="badge bg-primary">
+
+                                <i class="bi bi-telephone-fill"></i>
+
+                                Contacted
+
+                            </span>
+
+
+                        {% elif lead.status == "INTERESTED" %}
+
+                            <span class="badge bg-warning text-dark">
+
+                                <i class="bi bi-star-fill"></i>
+
+                                Interested
+
+                            </span>
+
+
+                        {% elif lead.status == "ONBOARDING" %}
+
+                            <span class="badge bg-info text-dark">
+
+                                <i class="bi bi-hand-thumbs-up-fill"></i>
+
+                                Onboarding
+
+                            </span>
+
+
+                        {% elif lead.status == "ACTIVE" %}
+
+                            <span class="badge bg-success">
+
+                                <i class="bi bi-check-circle-fill"></i>
+
+                                Active
+
+                            </span>
+
+
+                        {% elif lead.status == "LOST" %}
+
+                            <span class="badge bg-danger">
+
+                                <i class="bi bi-x-circle-fill"></i>
+
+                                Lost
+
+                            </span>
+
+
+                        {% else %}
+
+                            <span class="badge bg-dark">
+
+                                {{ lead.status }}
+
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- NOTES -->
+
+                    <td>
+
+                        {% if lead.notes %}
+
+                            <span>
+
+                                {% if lead.notes|length > 30 %}
+
+                                    {{ lead.notes[:30] }}....
+
+                                {% else %}
+
+                                    {{ lead.notes }}
+
+                                {% endif %}
+
+                            </span>
+
+
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary ms-1"
+                                data-bs-toggle="modal"
+                                data-bs-target="#notesModal{{ lead.id }}"
+                                title="Ver nota completa"
+                            >
+
+                                <i class="bi bi-eye"></i>
+
+                            </button>
+
+                        {% else %}
+
+                            <span class="text-muted">
+                                —
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- ACTIONS -->
+
+                    <td class="text-center">
+
+                        <div class="d-flex gap-2 justify-content-center">
+
+
+                            <!-- CHANGE STATUS -->
+
+                            <form
+                                action="/update-status/{{ lead.id }}"
+                                method="POST"
+                                class="d-flex gap-1"
+                            >
+
+                                <select
+                                    name="status"
+                                    class="form-select form-select-sm"
+                                >
+
+                                    <option
+                                        value="NEW"
+                                        {% if lead.status == "NEW" %}selected{% endif %}
+                                    >
+                                        NEW
+                                    </option>
+
+                                    <option
+                                        value="CONTACTED"
+                                        {% if lead.status == "CONTACTED" %}selected{% endif %}
+                                    >
+                                        CONTACTED
+                                    </option>
+
+                                    <option
+                                        value="INTERESTED"
+                                        {% if lead.status == "INTERESTED" %}selected{% endif %}
+                                    >
+                                        INTERESTED
+                                    </option>
+
+                                    <option
+                                        value="ONBOARDING"
+                                        {% if lead.status == "ONBOARDING" %}selected{% endif %}
+                                    >
+                                        ONBOARDING
+                                    </option>
+
+                                    <option
+                                        value="ACTIVE"
+                                        {% if lead.status == "ACTIVE" %}selected{% endif %}
+                                    >
+                                        ACTIVE
+                                    </option>
+
+                                    <option
+                                        value="LOST"
+                                        {% if lead.status == "LOST" %}selected{% endif %}
+                                    >
+                                        LOST
+                                    </option>
+
+                                </select>
+
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-sm btn-outline-primary"
+                                    title="Actualizar estado"
+                                >
+
+                                    ✓
+
+                                </button>
+
+                            </form>
+
+
+                            <!-- EDIT -->
+
+                            <a
+                                href="/edit-lead/{{ lead.id }}"
+                                class="btn btn-sm btn-warning"
+                                title="Editar lead"
+                            >
+
+                                <i class="bi bi-pencil-fill"></i>
+
+                            </a>
+
+
+                            <!-- DELETE -->
+
+                            <a
+                                href="/delete-lead/{{ lead.id }}"
+                                class="btn btn-sm btn-danger"
+                                title="Eliminar lead"
+                                onclick="return confirm('¿Seguro que quieres eliminar este lead?');"
+                            >
+
+                                <i class="bi bi-trash-fill"></i>
+
+                            </a>
+
+                        </div>
+
+                    </td>
+
+
+                </tr>
+
+
+                <!-- =========================
+                     NOTES MODAL
+                ========================== -->
+
+                {% if lead.notes %}
+
+                <div
+                    class="modal fade"
+                    id="notesModal{{ lead.id }}"
+                    tabindex="-1"
+                    aria-labelledby="notesModalLabel{{ lead.id }}"
+                    aria-hidden="true"
+                >
+
+                    <div class="modal-dialog modal-dialog-centered">
+
+                        <div class="modal-content">
+
+
+                            <div class="modal-header">
+
+                                <h5
+                                    class="modal-title"
+                                    id="notesModalLabel{{ lead.id }}"
+                                >
+
+                                    <i class="bi bi-journal-text"></i>
+
+                                    Notes — {{ lead.name }}
+
+                                </h5>
+
+
+                                <button
+                                    type="button"
+                                    class="btn-close"
+                                    data-bs-dismiss="modal"
+                                    aria-label="Close"
+                                ></button>
+
+                            </div>
+
+
+                            <div class="modal-body">
+
+                                <p class="mb-0">
+
+                                    {{ lead.notes }}
+
+                                </p>
+
+                            </div>
+
+
+                            <div class="modal-footer">
+
+                                <button
+                                    type="button"
+                                    class="btn btn-secondary"
+                                    data-bs-dismiss="modal"
+                                >
+
+                                    Close
+
+                                </button>
+
+                            </div>
+
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                {% endif %}
+
+
+                {% endfor %}
+
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    {% else %}
+
+
+    <!-- =========================
+         NO RESULTS
+    ========================== -->
+
+    <div class="text-center py-5">
+
+
+        {% if search or status_filter %}
+
+            <h3>
+
+                <i class="bi bi-search"></i>
+
+                No encontramos leads
+
+            </h3>
+
+
+            <p class="text-muted">
+
+                Prueba con otro nombre o estado.
+
+            </p>
+
+
+            <a
+                href="/leads"
+                class="btn btn-outline-primary"
+            >
+
+                Mostrar todos
+
+            </a>
+
+
+        {% else %}
+
+            <h3>
+
+                📭 No hay leads todavía
+
+            </h3>
+
+
+            <p class="text-muted">
+
+                Empieza añadiendo tu primer propietario.
+
+            </p>
+
+
+            <a
+                href="/add-lead"
+                class="btn btn-primary"
+            >
+
+                ➕ Añadir Lead
+
+            </a>
+
+        {% endif %}
+
+
+    </div>
+
+
+    {% endif %}
+
+
+</div>
+
+</div>
+
+{% endblock %}

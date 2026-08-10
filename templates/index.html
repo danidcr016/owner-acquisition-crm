@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+
+
+{% block title %}
+
+Dashboard - Owner Acquisition CRM
+
+{% endblock %}
+
+
+{% block content %}
+
+
+<!-- =========================
+     HEADER
+========================== -->
+
+<div class="card shadow mb-4">
+
+    <div class="card-body">
+
+
+        <h1 class="mb-3">
+
+            <i class="bi bi-buildings-fill"></i>
+
+            Owner Acquisition CRM
+
+        </h1>
+
+
+        <p class="text-muted">
+
+            Gestiona propietarios, llamadas y seguimientos.
+
+        </p>
+
+
+        <a
+            href="/add-lead"
+            class="btn btn-primary"
+        >
+
+            <i class="bi bi-person-plus-fill"></i>
+
+            Nuevo Lead
+
+        </a>
+
+
+        <a
+            href="/leads"
+            class="btn btn-success"
+        >
+
+            <i class="bi bi-people-fill"></i>
+
+            Ver Leads
+
+        </a>
+
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     TOTAL
+========================== -->
+
+<div class="row mb-4">
+
+
+    <div class="col-md-12">
+
+
+        <div class="card text-center shadow-sm">
+
+
+            <div class="card-body">
+
+
+                <h5>
+                    Total Leads
+                </h5>
+
+
+                <h1>
+                    {{ total_leads }}
+                </h1>
+
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+</div>
+
+
+<!-- =========================
+     STATES
+========================== -->
+
+<div class="row g-4">
+
+
+    <!-- NEW -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-secondary">
+
+                    <i class="bi bi-person-fill-add"></i>
+
+                    New
+
+                </h5>
+
+
+                <h2 class="text-secondary">
+
+                    {{ new_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    Nuevos propietarios
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- CONTACTED -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-primary">
+
+                    <i class="bi bi-telephone-fill"></i>
+
+                    Contacted
+
+                </h5>
+
+
+                <h2 class="text-primary">
+
+                    {{ contacted_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    Propietarios contactados
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- INTERESTED -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-warning">
+
+                    <i class="bi bi-star-fill"></i>
+
+                    Interested
+
+                </h5>
+
+
+                <h2 class="text-warning">
+
+                    {{ interested_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    Propietarios interesados
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ONBOARDING -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-info">
+
+                    <i class="bi bi-hand-thumbs-up-fill"></i>
+
+                    Onboarding
+
+                </h5>
+
+
+                <h2 class="text-info">
+
+                    {{ onboarding_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    En proceso de incorporación
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ACTIVE -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-success">
+
+                    <i class="bi bi-check-circle-fill"></i>
+
+                    Active
+
+                </h5>
+
+
+                <h2 class="text-success">
+
+                    {{ active_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    Propietarios activos
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- LOST -->
+
+    <div class="col-md-4">
+
+        <div class="card text-center shadow-sm">
+
+            <div class="card-body">
+
+
+                <h5 class="text-danger">
+
+                    <i class="bi bi-x-circle-fill"></i>
+
+                    Lost
+
+                </h5>
+
+
+                <h2 class="text-danger">
+
+                    {{ lost_leads }}
+
+                </h2>
+
+
+                <p class="text-muted mb-0">
+
+                    Leads perdidos
+
+                </p>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+</div>
+
+
+{% endblock %}
