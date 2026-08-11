@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}
+Nuevo Follow-Up - Owner Acquisition CRM
+{% endblock %}
+
+{% block content %}
+
+
+<!-- =========================
+     HEADER
+========================== -->
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+
+    <div>
+
+        <h1>
+
+            <i class="bi bi-calendar-plus-fill"></i>
+
+            Nuevo Follow-Up
+
+        </h1>
+
+        <p class="text-muted mb-0">
+
+            Programa una llamada, email, WhatsApp o tarea.
+
+        </p>
+
+    </div>
+
+
+    <a
+        href="/follow-ups"
+        class="btn btn-secondary"
+    >
+
+        <i class="bi bi-arrow-left"></i>
+
+        Volver
+
+    </a>
+
+
+</div>
+
+
+<!-- =========================
+     FORM
+========================== -->
+
+<div class="card shadow">
+
+    <div class="card-body">
+
+
+        <form
+            method="POST"
+            action="/add-follow-up"
+        >
+
+
+            <!-- LEAD -->
+
+            <div class="mb-3">
+
+                <label
+                    for="lead_id"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-person-fill"></i>
+
+                    Lead
+
+                </label>
+
+
+                <select
+                    id="lead_id"
+                    name="lead_id"
+                    class="form-select"
+                    required
+                >
+
+                    <option value="">
+                        Selecciona un propietario
+                    </option>
+
+
+                    {% for lead in leads %}
+
+                        <option value="{{ lead.id }}">
+
+                            {{ lead.name }}
+
+                            {% if lead.city %}
+                                — {{ lead.city }}
+                            {% endif %}
+
+                        </option>
+
+                    {% endfor %}
+
+
+                </select>
+
+            </div>
+
+
+            <!-- TYPE -->
+
+            <div class="mb-3">
+
+                <label
+                    for="type"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-list-check"></i>
+
+                    Tipo de Follow-Up
+
+                </label>
+
+
+                <select
+                    id="type"
+                    name="type"
+                    class="form-select"
+                    required
+                >
+
+                    <option value="">
+                        Selecciona un tipo
+                    </option>
+
+
+                    <option value="CALL">
+
+                        📞 Call
+
+                    </option>
+
+
+                    <option value="EMAIL">
+
+                        ✉️ Email
+
+                    </option>
+
+
+                    <option value="WHATSAPP">
+
+                        💬 WhatsApp
+
+                    </option>
+
+
+                    <option value="SMS">
+
+                        📱 SMS
+
+                    </option>
+
+
+                    <option value="MEETING">
+
+                        📅 Meeting
+
+                    </option>
+
+
+                    <option value="OTHER">
+
+                        📝 Other
+
+                    </option>
+
+
+                </select>
+
+            </div>
+
+
+            <!-- TITLE -->
+
+            <div class="mb-3">
+
+                <label
+                    for="title"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-pencil-fill"></i>
+
+                    Título
+
+                </label>
+
+
+                <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    class="form-control"
+                    placeholder="Ej. Call John about his property"
+                    maxlength="200"
+                    required
+                >
+
+            </div>
+
+
+            <!-- DATE -->
+
+            <div class="mb-3">
+
+                <label
+                    for="due_date"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-calendar-event-fill"></i>
+
+                    Fecha y hora
+
+                </label>
+
+
+                <input
+                    type="datetime-local"
+                    id="due_date"
+                    name="due_date"
+                    class="form-control"
+                    required
+                >
+
+            </div>
+
+
+            <!-- NOTES -->
+
+            <div class="mb-4">
+
+                <label
+                    for="notes"
+                    class="form-label"
+                >
+
+                    <i class="bi bi-journal-text"></i>
+
+                    Notas
+
+                </label>
+
+
+                <textarea
+                    id="notes"
+                    name="notes"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Información adicional sobre este follow-up..."
+                ></textarea>
+
+            </div>
+
+
+            <!-- BUTTONS -->
+
+            <div class="d-flex gap-2">
+
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                >
+
+                    <i class="bi bi-check-lg"></i>
+
+                    Crear Follow-Up
+
+                </button>
+
+
+                <a
+                    href="/follow-ups"
+                    class="btn btn-outline-secondary"
+                >
+
+                    Cancelar
+
+                </a>
+
+
+            </div>
+
+
+        </form>
+
+
+    </div>
+
+</div>
+
+
+{% endblock %}

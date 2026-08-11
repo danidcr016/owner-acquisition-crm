@@ -97,10 +97,68 @@ class Lead(db.Model):
         default=datetime.utcnow
     )
 
-
     def __repr__(self):
 
         return f"<Lead {self.name}>"
+
+
+# =========================
+# FOLLOW-UP MODEL
+# =========================
+
+class FollowUp(db.Model):
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    lead_id = db.Column(
+        db.Integer,
+        db.ForeignKey("lead.id"),
+        nullable=False
+    )
+
+    type = db.Column(
+        db.String(50),
+        nullable=False
+    )
+
+    title = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    due_date = db.Column(
+        db.DateTime,
+        nullable=False
+    )
+
+    notes = db.Column(
+        db.Text
+    )
+
+    completed = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    lead = db.relationship(
+        "Lead",
+        backref=db.backref(
+            "follow_ups",
+            lazy=True
+        )
+    )
+
+    def __repr__(self):
+
+        return f"<FollowUp {self.title}>"
 
 
 # =========================
@@ -113,39 +171,31 @@ def home():
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     total_leads = Lead.query.count()
-
 
     new_leads = Lead.query.filter_by(
         status="NEW"
     ).count()
 
-
     contacted_leads = Lead.query.filter_by(
         status="CONTACTED"
     ).count()
-
 
     interested_leads = Lead.query.filter_by(
         status="INTERESTED"
     ).count()
 
-
     onboarding_leads = Lead.query.filter_by(
         status="ONBOARDING"
     ).count()
-
 
     active_leads = Lead.query.filter_by(
         status="ACTIVE"
     ).count()
 
-
     lost_leads = Lead.query.filter_by(
         status="LOST"
     ).count()
-
 
     return render_template(
 
@@ -181,7 +231,6 @@ def add_lead():
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     if request.method == "POST":
 
         lead = Lead(
@@ -204,16 +253,13 @@ def add_lead():
 
         )
 
-
         db.session.add(lead)
 
         db.session.commit()
 
-
         return render_template(
             "success.html"
         )
-
 
     return render_template(
         "add_lead.html"
@@ -231,21 +277,17 @@ def leads():
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     search = request.args.get(
         "search",
         ""
     ).strip()
-
 
     status_filter = request.args.get(
         "status",
         ""
     ).strip()
 
-
     query = Lead.query
-
 
     # SEARCH BY NAME
 
@@ -257,7 +299,6 @@ def leads():
             )
         )
 
-
     # FILTER BY STATUS
 
     if status_filter:
@@ -266,16 +307,13 @@ def leads():
             Lead.status == status_filter
         )
 
-
-    # NEWEST FIRST
+    # ORDER BY ID
 
     query = query.order_by(
         Lead.id.asc()
     )
 
-
     all_leads = query.all()
-
 
     return render_template(
 
@@ -303,15 +341,11 @@ def update_status(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     lead = Lead.query.get_or_404(id)
-
 
     lead.status = request.form["status"]
 
-
     db.session.commit()
-
 
     return redirect("/leads")
 
@@ -328,14 +362,11 @@ def delete_lead(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     lead = Lead.query.get_or_404(id)
-
 
     db.session.delete(lead)
 
     db.session.commit()
-
 
     return redirect("/leads")
 
@@ -353,9 +384,7 @@ def edit_lead(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     lead = Lead.query.get_or_404(id)
-
 
     if request.method == "POST":
 
@@ -373,12 +402,9 @@ def edit_lead(id):
 
         lead.notes = request.form["notes"]
 
-
         db.session.commit()
 
-
         return redirect("/leads")
-
 
     return render_template(
 
@@ -390,6 +416,119 @@ def edit_lead(id):
 
 
 # =========================
+# VIEW FOLLOW-UPS
+# =========================
+
+@app.route("/follow-ups")
+def follow_ups():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    all_follow_ups = FollowUp.query.order_by(
+        FollowUp.due_date.asc()
+    ).all()
+
+    return render_template(
+        "follow_ups.html",
+        follow_ups=all_follow_ups
+    )
+
+
+# =========================
+# ADD FOLLOW-UP
+# =========================
+
+@app.route(
+    "/add-follow-up",
+    methods=["GET", "POST"]
+)
+def add_follow_up():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    leads = Lead.query.order_by(
+        Lead.name.asc()
+    ).all()
+
+    if request.method == "POST":
+
+        due_date = datetime.strptime(
+            request.form["due_date"],
+            "%Y-%m-%dT%H:%M"
+        )
+
+        follow_up = FollowUp(
+
+            lead_id=request.form["lead_id"],
+
+            type=request.form["type"],
+
+            title=request.form["title"],
+
+            due_date=due_date,
+
+            notes=request.form["notes"]
+
+        )
+
+        db.session.add(follow_up)
+
+        db.session.commit()
+
+        return redirect("/follow-ups")
+
+    return render_template(
+        "add_follow_up.html",
+        leads=leads
+    )
+
+
+# =========================
+# COMPLETE FOLLOW-UP
+# =========================
+
+@app.route(
+    "/complete-follow-up/<int:id>",
+    methods=["POST"]
+)
+def complete_follow_up(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    follow_up = FollowUp.query.get_or_404(id)
+
+    follow_up.completed = True
+
+    db.session.commit()
+
+    return redirect("/follow-ups")
+
+
+# =========================
+# DELETE FOLLOW-UP
+# =========================
+
+@app.route(
+    "/delete-follow-up/<int:id>"
+)
+def delete_follow_up(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    follow_up = FollowUp.query.get_or_404(id)
+
+    db.session.delete(follow_up)
+
+    db.session.commit()
+
+    return redirect("/follow-ups")
+
+
+# =========================
 # DATABASE
 # =========================
 
@@ -397,14 +536,12 @@ with app.app_context():
 
     db.create_all()
 
-
-    # Add created_at to existing database
+    # Add created_at to existing Lead database
     # if the column does not exist yet.
 
     inspector = inspect(
         db.engine
     )
-
 
     columns = [
 
@@ -415,7 +552,6 @@ with app.app_context():
         )
 
     ]
-
 
     if "created_at" not in columns:
 
