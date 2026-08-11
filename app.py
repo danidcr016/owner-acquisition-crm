@@ -425,6 +425,7 @@ def follow_ups():
     if not session.get("logged_in"):
         return redirect("/login")
 
+    # Get all follow-ups
     all_follow_ups = FollowUp.query.order_by(
         FollowUp.due_date.asc()
     ).all()
@@ -434,6 +435,75 @@ def follow_ups():
         follow_ups=all_follow_ups
     )
 
+    # =========================
+    # CATEGORIES
+    # =========================
+
+    overdue_follow_ups = []
+
+    today_follow_ups = []
+
+    upcoming_follow_ups = []
+
+    completed_follow_ups = []
+
+
+    for follow_up in all_follow_ups:
+
+
+        # COMPLETED
+
+        if follow_up.completed:
+
+            completed_follow_ups.append(
+                follow_up
+            )
+
+            continue
+
+
+        # OVERDUE
+
+        if follow_up.due_date < now:
+
+            overdue_follow_ups.append(
+                follow_up
+            )
+
+            continue
+
+
+        # TODAY
+
+        if follow_up.due_date.date() == now.date():
+
+            today_follow_ups.append(
+                follow_up
+            )
+
+            continue
+
+
+        # UPCOMING
+
+        upcoming_follow_ups.append(
+            follow_up
+        )
+
+
+    return render_template(
+
+        "follow_ups.html",
+
+        overdue_follow_ups=overdue_follow_ups,
+
+        today_follow_ups=today_follow_ups,
+
+        upcoming_follow_ups=upcoming_follow_ups,
+
+        completed_follow_ups=completed_follow_ups
+
+    )
 
 # =========================
 # ADD FOLLOW-UP
@@ -484,6 +554,52 @@ def add_follow_up():
         leads=leads
     )
 
+# =========================
+# EDIT FOLLOW-UP
+# =========================
+
+@app.route(
+    "/edit-follow-up/<int:id>",
+    methods=["GET", "POST"]
+)
+def edit_follow_up(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    follow_up = FollowUp.query.get_or_404(id)
+
+    leads = Lead.query.order_by(
+        Lead.name.asc()
+    ).all()
+
+    if request.method == "POST":
+
+        due_date = datetime.strptime(
+            request.form["due_date"],
+            "%Y-%m-%dT%H:%M"
+        )
+
+        follow_up.lead_id = request.form["lead_id"]
+
+        follow_up.type = request.form["type"]
+
+        follow_up.title = request.form["title"]
+
+        follow_up.due_date = due_date
+
+        follow_up.notes = request.form["notes"]
+
+        db.session.commit()
+
+        return redirect("/follow-ups")
+
+    return render_template(
+        "edit_follow_up.html",
+        follow_up=follow_up,
+        leads=leads
+    )
+
 
 # =========================
 # COMPLETE FOLLOW-UP
@@ -501,6 +617,27 @@ def complete_follow_up(id):
     follow_up = FollowUp.query.get_or_404(id)
 
     follow_up.completed = True
+
+    db.session.commit()
+
+    return redirect("/follow-ups")
+
+# =========================
+# REOPEN FOLLOW-UP
+# =========================
+
+@app.route(
+    "/reopen-follow-up/<int:id>",
+    methods=["POST"]
+)
+def reopen_follow_up(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    follow_up = FollowUp.query.get_or_404(id)
+
+    follow_up.completed = False
 
     db.session.commit()
 

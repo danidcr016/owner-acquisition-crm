@@ -6,38 +6,459 @@ Follow-Ups - Owner Acquisition CRM
 
 {% block content %}
 
-<!-- =========================
-     HEADER
-========================== -->
+<!-- HEADER -->
 
 <div class="d-flex justify-content-between align-items-center mb-4">
 
-    <div>
+<div>
 
-        <h1>
-            <i class="bi bi-calendar-check-fill"></i>
-            Follow-Ups
-        </h1>
+    <h1>
+        <i class="bi bi-calendar-check-fill"></i>
+        Follow-Ups
+    </h1>
 
-        <p class="text-muted mb-0">
-            Gestiona llamadas, emails, WhatsApp y otras tareas.
-        </p>
+    <p class="text-muted mb-0">
+        Gestiona llamadas, emails, WhatsApp y otras tareas.
+    </p>
+
+</div>
+
+
+<div class="d-flex gap-2">
+
+    <a
+        href="/"
+        class="btn btn-secondary"
+    >
+        <i class="bi bi-house-fill"></i>
+        Dashboard
+    </a>
+
+
+    <a
+        href="/add-follow-up"
+        class="btn btn-primary"
+    >
+        <i class="bi bi-plus-lg"></i>
+        Nuevo Follow-Up
+    </a>
+
+</div>
+
+</div>
+
+<!-- SUMMARY -->
+
+<div class="row g-3 mb-4">
+
+<!-- TOTAL -->
+
+<div class="col-md-4">
+
+    <div class="card shadow-sm text-center">
+
+        <div class="card-body">
+
+            <h6 class="text-muted">
+                Total
+            </h6>
+
+            <h2>
+                {{ follow_ups|length }}
+            </h2>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- PENDING -->
+
+<div class="col-md-4">
+
+    <div class="card shadow-sm text-center">
+
+        <div class="card-body">
+
+            <h6 class="text-warning">
+                <i class="bi bi-clock-fill"></i>
+                Pending
+            </h6>
+
+            <h2 id="pendingCount">
+                0
+            </h2>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- COMPLETED -->
+
+<div class="col-md-4">
+
+    <div class="card shadow-sm text-center">
+
+        <div class="card-body">
+
+            <h6 class="text-success">
+                <i class="bi bi-check-circle-fill"></i>
+                Completed
+            </h6>
+
+            <h2 id="completedCount">
+                0
+            </h2>
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
+
+<!-- FOLLOW-UP LIST -->
+
+<div class="card shadow">
+
+<div class="card-body">
+
+
+    {% if follow_ups %}
+
+
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle">
+
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Tipo
+                    </th>
+
+                    <th>
+                        Follow-Up
+                    </th>
+
+                    <th>
+                        Lead
+                    </th>
+
+                    <th>
+                        Fecha
+                    </th>
+
+                    <th>
+                        Estado
+                    </th>
+
+                    <th class="text-center">
+                        Acciones
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+
+                {% for follow_up in follow_ups %}
+
+
+                <tr
+                    class="follow-up-row"
+                    data-due-date="{{ follow_up.due_date.isoformat() }}"
+                    data-completed="{{ 'true' if follow_up.completed else 'false' }}"
+                >
+
+
+                    <!-- TYPE -->
+
+                    <td>
+
+                        {% if follow_up.type == "CALL" %}
+
+                            <span class="badge bg-primary">
+
+                                <i class="bi bi-telephone-fill"></i>
+
+                                Call
+
+                            </span>
+
+
+                        {% elif follow_up.type == "EMAIL" %}
+
+                            <span class="badge bg-info text-dark">
+
+                                <i class="bi bi-envelope-fill"></i>
+
+                                Email
+
+                            </span>
+
+
+                        {% elif follow_up.type == "WHATSAPP" %}
+
+                            <span class="badge bg-success">
+
+                                <i class="bi bi-whatsapp"></i>
+
+                                WhatsApp
+
+                            </span>
+
+
+                        {% elif follow_up.type == "SMS" %}
+
+                            <span class="badge bg-secondary">
+
+                                <i class="bi bi-chat-text-fill"></i>
+
+                                SMS
+
+                            </span>
+
+
+                        {% elif follow_up.type == "MEETING" %}
+
+                            <span class="badge bg-warning text-dark">
+
+                                <i class="bi bi-calendar-event-fill"></i>
+
+                                Meeting
+
+                            </span>
+
+
+                        {% else %}
+
+                            <span class="badge bg-dark">
+
+                                <i class="bi bi-three-dots"></i>
+
+                                Other
+
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- TITLE -->
+
+                    <td>
+
+                        <strong>
+                            {{ follow_up.title }}
+                        </strong>
+
+
+                        {% if follow_up.notes %}
+
+                            <br>
+
+                            <small class="text-muted">
+
+                                {{ follow_up.notes[:60] }}
+
+                                {% if follow_up.notes|length > 60 %}
+                                    ...
+                                {% endif %}
+
+                            </small>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- LEAD -->
+
+                    <td>
+
+                        <a
+                            href="/edit-lead/{{ follow_up.lead.id }}"
+                            class="text-decoration-none"
+                        >
+
+                            <strong>
+                                {{ follow_up.lead.name }}
+                            </strong>
+
+                        </a>
+
+
+                        {% if follow_up.lead.city %}
+
+                            <br>
+
+                            <small class="text-muted">
+                                {{ follow_up.lead.city }}
+                            </small>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- DATE -->
+
+                    <td>
+
+                        <span class="follow-up-date">
+
+                            {{ follow_up.due_date.strftime("%d/%m/%Y %H:%M") }}
+
+                        </span>
+
+                    </td>
+
+
+                    <!-- STATUS -->
+
+                    <td>
+
+                        {% if follow_up.completed %}
+
+                            <span class="badge bg-success status-badge">
+
+                                <i class="bi bi-check-circle-fill"></i>
+
+                                Completed
+
+                            </span>
+
+
+                        {% else %}
+
+                            <span class="badge bg-warning text-dark status-badge">
+
+                                <i class="bi bi-clock-fill"></i>
+
+                                Pending
+
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <!-- ACTIONS -->
+
+                    <td>
+
+                        <div class="d-flex gap-2 justify-content-center">
+
+                            <a
+                                href="/edit-follow-up/{{ follow_up.id }}"
+                                class="btn btn-sm btn-outline-primary"
+                                title="Edit follow-up"
+                            >
+                                <i class="bi bi-pencil-fill"></i>
+                            </a>  
+
+
+                            {% if not follow_up.completed %}
+
+                            <form
+                                action="/complete-follow-up/{{ follow_up.id }}"
+                                method="POST"
+                            >
+                                <button
+                                    type="submit"
+                                    class="btn btn-sm btn-outline-success"
+                                    title="Mark as completed"
+                                >
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                            </form>
+
+                        {% else %}
+
+                            <form
+                                action="/reopen-follow-up/{{ follow_up.id }}"
+                                method="POST"
+                            >
+                                <button
+                                    type="submit"
+                                    class="btn btn-sm btn-outline-warning"
+                                    title="Reopen follow-up"
+                                >
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </form>
+
+                            {% endif %}
+
+
+                            <a
+                                href="/delete-follow-up/{{ follow_up.id }}"
+                                class="btn btn-sm btn-outline-danger"
+                                title="Delete follow-up"
+                                onclick="return confirm('¿Seguro que quieres eliminar este follow-up?');"
+                            >
+
+                                <i class="bi bi-trash-fill"></i>
+
+                            </a>
+
+
+                        </div>
+
+                    </td>
+
+
+                </tr>
+
+
+                {% endfor %}
+
+
+            </tbody>
+
+
+        </table>
 
     </div>
 
 
-    <div class="d-flex gap-2">
+    {% else %}
 
-        <a
-            href="/"
-            class="btn btn-secondary"
-        >
 
-            <i class="bi bi-house-fill"></i>
+    <!-- NO FOLLOW-UPS -->
 
-            Dashboard
+    <div class="text-center py-5">
 
-        </a>
+
+        <i
+            class="bi bi-calendar-x"
+            style="font-size: 3rem;"
+        ></i>
+
+
+        <h3 class="mt-3">
+            No hay Follow-Ups todavía
+        </h3>
+
+
+        <p class="text-muted">
+            Crea tu primer seguimiento para empezar.
+        </p>
 
 
         <a
@@ -47,447 +468,22 @@ Follow-Ups - Owner Acquisition CRM
 
             <i class="bi bi-plus-lg"></i>
 
-            Nuevo Follow-Up
+            Crear Follow-Up
 
         </a>
 
+
     </div>
+
+
+    {% endif %}
+
 
 </div>
 
-
-<!-- =========================
-     SUMMARY
-========================== -->
-
-<div class="row g-3 mb-4">
-
-
-    <!-- TOTAL -->
-
-    <div class="col-md-4">
-
-        <div class="card shadow-sm text-center">
-
-            <div class="card-body">
-
-                <h6 class="text-muted">
-                    Total
-                </h6>
-
-                <h2>
-                    {{ follow_ups|length }}
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- PENDING -->
-
-    <div class="col-md-4">
-
-        <div class="card shadow-sm text-center">
-
-            <div class="card-body">
-
-                <h6 class="text-warning">
-                    <i class="bi bi-clock-fill"></i>
-                    Pending
-                </h6>
-
-                <h2 id="pendingCount">
-                    0
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- COMPLETED -->
-
-    <div class="col-md-4">
-
-        <div class="card shadow-sm text-center">
-
-            <div class="card-body">
-
-                <h6 class="text-success">
-                    <i class="bi bi-check-circle-fill"></i>
-                    Completed
-                </h6>
-
-                <h2 id="completedCount">
-                    0
-                </h2>
-
-            </div>
-
-        </div>
-
-    </div>
-
 </div>
 
-
-<!-- =========================
-     FOLLOW-UP LIST
-========================== -->
-
-<div class="card shadow">
-
-    <div class="card-body">
-
-
-        {% if follow_ups %}
-
-
-        <div class="table-responsive">
-
-            <table class="table table-hover align-middle">
-
-
-                <thead>
-
-                    <tr>
-
-                        <th>
-                            Tipo
-                        </th>
-
-                        <th>
-                            Follow-Up
-                        </th>
-
-                        <th>
-                            Lead
-                        </th>
-
-                        <th>
-                            Fecha
-                        </th>
-
-                        <th>
-                            Estado
-                        </th>
-
-                        <th class="text-center">
-                            Acciones
-                        </th>
-
-                    </tr>
-
-                </thead>
-
-
-                <tbody>
-
-
-                    {% for follow_up in follow_ups %}
-
-
-                    <tr
-                        class="follow-up-row"
-                        data-due-date="{{ follow_up.due_date.isoformat() }}"
-                        data-completed="{{ 'true' if follow_up.completed else 'false' }}"
-                    >
-
-
-                        <!-- TYPE -->
-
-                        <td>
-
-                            {% if follow_up.type == "CALL" %}
-
-                                <span class="badge bg-primary">
-
-                                    <i class="bi bi-telephone-fill"></i>
-
-                                    Call
-
-                                </span>
-
-
-                            {% elif follow_up.type == "EMAIL" %}
-
-                                <span class="badge bg-info text-dark">
-
-                                    <i class="bi bi-envelope-fill"></i>
-
-                                    Email
-
-                                </span>
-
-
-                            {% elif follow_up.type == "WHATSAPP" %}
-
-                                <span class="badge bg-success">
-
-                                    <i class="bi bi-whatsapp"></i>
-
-                                    WhatsApp
-
-                                </span>
-
-
-                            {% elif follow_up.type == "SMS" %}
-
-                                <span class="badge bg-secondary">
-
-                                    <i class="bi bi-chat-text-fill"></i>
-
-                                    SMS
-
-                                </span>
-
-
-                            {% elif follow_up.type == "MEETING" %}
-
-                                <span class="badge bg-warning text-dark">
-
-                                    <i class="bi bi-calendar-event-fill"></i>
-
-                                    Meeting
-
-                                </span>
-
-
-                            {% else %}
-
-                                <span class="badge bg-dark">
-
-                                    <i class="bi bi-three-dots"></i>
-
-                                    Other
-
-                                </span>
-
-                            {% endif %}
-
-                        </td>
-
-
-                        <!-- TITLE -->
-
-                        <td>
-
-                            <strong>
-
-                                {{ follow_up.title }}
-
-                            </strong>
-
-
-                            {% if follow_up.notes %}
-
-                                <br>
-
-                                <small class="text-muted">
-
-                                    {{ follow_up.notes[:60] }}
-
-                                    {% if follow_up.notes|length > 60 %}
-                                        ...
-                                    {% endif %}
-
-                                </small>
-
-                            {% endif %}
-
-                        </td>
-
-
-                        <!-- LEAD -->
-
-                        <td>
-
-                            <a
-                                href="/edit-lead/{{ follow_up.lead.id }}"
-                                class="text-decoration-none"
-                            >
-
-                                <strong>
-                                    {{ follow_up.lead.name }}
-                                </strong>
-
-                            </a>
-
-                            {% if follow_up.lead.city %}
-
-                                <br>
-
-                                <small class="text-muted">
-
-                                    {{ follow_up.lead.city }}
-
-                                </small>
-
-                            {% endif %}
-
-                        </td>
-
-
-                        <!-- DATE -->
-
-                        <td>
-
-                            <span class="follow-up-date">
-
-                                {{ follow_up.due_date.strftime("%d/%m/%Y %H:%M") }}
-
-                            </span>
-
-                        </td>
-
-
-                        <!-- STATUS -->
-
-                        <td>
-
-                            {% if follow_up.completed %}
-
-                                <span class="badge bg-success status-badge">
-
-                                    <i class="bi bi-check-circle-fill"></i>
-
-                                    Completed
-
-                                </span>
-
-                            {% else %}
-
-                                <span class="badge bg-warning text-dark status-badge">
-
-                                    <i class="bi bi-clock-fill"></i>
-
-                                    Pending
-
-                                </span>
-
-                            {% endif %}
-
-                        </td>
-
-
-                        <!-- ACTIONS -->
-
-                        <td>
-
-                            <div class="d-flex gap-2 justify-content-center">
-
-
-                                {% if not follow_up.completed %}
-
-                                    <form
-                                        action="/complete-follow-up/{{ follow_up.id }}"
-                                        method="POST"
-                                    >
-
-                                        <button
-                                            type="submit"
-                                            class="btn btn-sm btn-outline-success"
-                                            title="Mark as completed"
-                                        >
-
-                                            <i class="bi bi-check-lg"></i>
-
-                                        </button>
-
-                                    </form>
-
-                                {% endif %}
-
-
-                                <a
-                                    href="/delete-follow-up/{{ follow_up.id }}"
-                                    class="btn btn-sm btn-outline-danger"
-                                    title="Delete follow-up"
-                                    onclick="return confirm('¿Seguro que quieres eliminar este follow-up?');"
-                                >
-
-                                    <i class="bi bi-trash-fill"></i>
-
-                                </a>
-
-
-                            </div>
-
-                        </td>
-
-
-                    </tr>
-
-
-                    {% endfor %}
-
-
-                </tbody>
-
-            </table>
-
-        </div>
-
-
-        {% else %}
-
-
-        <!-- NO FOLLOW-UPS -->
-
-        <div class="text-center py-5">
-
-
-            <i
-                class="bi bi-calendar-x"
-                style="font-size: 3rem;"
-            ></i>
-
-
-            <h3 class="mt-3">
-
-                No hay Follow-Ups todavía
-
-            </h3>
-
-
-            <p class="text-muted">
-
-                Crea tu primer seguimiento para empezar.
-
-            </p>
-
-
-            <a
-                href="/add-follow-up"
-                class="btn btn-primary"
-            >
-
-                <i class="bi bi-plus-lg"></i>
-
-                Crear Follow-Up
-
-            </a>
-
-
-        </div>
-
-
-        {% endif %}
-
-
-    </div>
-
-</div>
-
-
-<!-- =========================
-     FOLLOW-UP STATUS SCRIPT
-========================== -->
+<!-- AUTOMATIC STATUS SCRIPT -->
 
 <script>
 
@@ -495,24 +491,34 @@ document.addEventListener(
     "DOMContentLoaded",
     function () {
 
+
         const rows =
             document.querySelectorAll(".follow-up-row");
 
+
         let pendingCount = 0;
+
         let completedCount = 0;
 
 
         rows.forEach(function (row) {
 
+
             const completed =
                 row.dataset.completed === "true";
+
 
             const dueDate =
                 new Date(row.dataset.dueDate);
 
+
             const statusBadge =
                 row.querySelector(".status-badge");
 
+
+            /*
+             * COMPLETED
+             */
 
             if (completed) {
 
@@ -523,35 +529,117 @@ document.addEventListener(
             }
 
 
+            /*
+             * PENDING
+             */
+
             pendingCount++;
 
 
+            const now =
+                new Date();
+
+
             /*
-             * If the follow-up is overdue,
-             * change the badge automatically.
+             * OVERDUE
              */
 
-            if (dueDate < new Date()) {
+            if (dueDate < now) {
+
 
                 statusBadge.className =
                     "badge bg-danger status-badge";
 
+
                 statusBadge.innerHTML =
                     '<i class="bi bi-exclamation-circle-fill"></i> Overdue';
 
+
+                row.classList.add("table-danger");
+
+
+                return;
+
             }
+
+
+            /*
+             * TODAY
+             */
+
+            const today =
+                new Date();
+
+
+            const dueDay =
+                new Date(dueDate);
+
+
+            today.setHours(
+                0,
+                0,
+                0,
+                0
+            );
+
+
+            dueDay.setHours(
+                0,
+                0,
+                0,
+                0
+            );
+
+
+            if (
+                dueDay.getTime() ===
+                today.getTime()
+            ) {
+
+
+                statusBadge.className =
+                    "badge bg-warning text-dark status-badge";
+
+
+                statusBadge.innerHTML =
+                    '<i class="bi bi-clock-fill"></i> Today';
+
+
+                return;
+
+            }
+
+
+            /*
+             * UPCOMING
+             */
+
+            statusBadge.className =
+                "badge bg-primary status-badge";
+
+
+            statusBadge.innerHTML =
+                '<i class="bi bi-calendar-event-fill"></i> Upcoming';
+
 
         });
 
 
+        /*
+         * UPDATE COUNTERS
+         */
+
         document.getElementById(
             "pendingCount"
-        ).textContent = pendingCount;
+        ).textContent =
+            pendingCount;
 
 
         document.getElementById(
             "completedCount"
-        ).textContent = completedCount;
+        ).textContent =
+            completedCount;
+
 
     }
 
