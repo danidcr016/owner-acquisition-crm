@@ -11,6 +11,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
 # Secret key used by Flask sessions
 app.secret_key = "owner-acquisition-secret-key"
 
+# Session expires when the browser is closed
+app.config["SESSION_PERMANENT"] = False
+
 db = SQLAlchemy(app)
 
 
