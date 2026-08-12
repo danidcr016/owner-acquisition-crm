@@ -406,16 +406,18 @@ Follow-Ups - Owner Acquisition CRM
                             {% endif %}
 
 
+                          {% if current_user.role in ["admin", "developer"] %}
+
                             <a
                                 href="/delete-follow-up/{{ follow_up.id }}"
-                                class="btn btn-sm btn-outline-danger"
-                                title="Delete follow-up"
+                                class="btn btn-sm btn-danger"
+                                title="Eliminar follow-up"
                                 onclick="return confirm('¿Seguro que quieres eliminar este follow-up?');"
                             >
-
                                 <i class="bi bi-trash-fill"></i>
-
                             </a>
+
+                            {% endif %}
 
 
                         </div>

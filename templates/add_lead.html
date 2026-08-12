@@ -1,107 +1,253 @@
 {% extends "base.html" %}
 
 {% block title %}
-Leads - Owner Acquisition CRM
+Nuevo Propietario - Owner Acquisition CRM
 {% endblock %}
 
 {% block content %}
 
+<div class="container mt-5">
 
-    <div class="container mt-5">
+<div class="card shadow">
 
-        <div class="card shadow">
+    <div class="card-body">
 
-            <div class="card-body">
+        <h1 class="mb-4">
+            <i class="bi bi-person-plus-fill"></i>
+            Nuevo Propietario
+        </h1>
 
-                <h1 class="mb-4">
-                    <i class="bi bi-person-plus-fill"></i>
-                    Nuevo Propietario
-                </h1>
+        <form method="POST">
 
-                <form method="POST">
+            <!-- NAME -->
 
-                    <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input type="text"
-                               name="name"
-                               class="form-control">
-                    </div>
+            <div class="mb-3">
 
-                    <div class="mb-3">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text"
-                               name="phone"
-                               class="form-control">
-                    </div>
+                <label class="form-label">
+                    Nombre
+                </label>
 
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email"
-                               name="email"
-                               class="form-control">
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Ciudad</label>
-                        <input type="text"
-                               name="city"
-                               class="form-control">
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Origen</label>
-
-                        <select name="source"
-                                class="form-select">
-
-                            <option>Google Ads</option>
-                            <option>Cold Call</option>
-                            <option>Referral</option>
-                            <option>Facebook</option>
-
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Estado</label>
-
-                        <select name="status"
-                                class="form-select">
-
-                            <option>NEW</option>
-                            <option>CONTACTED</option>
-                            <option>INTERESTED</option>
-                            <option>ONBOARDING</option>
-                            <option>ACTIVE</option>
-                            <option>LOST</option>
-
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Notas</label>
-
-                        <textarea name="notes"
-                                  class="form-control"
-                                  rows="4"></textarea>
-                    </div>
-
-                    <button type="submit"
-                            class="btn btn-primary">
-                        Guardar Lead
-                    </button>
-
-                    <a href="/"
-                       class="btn btn-secondary">
-                        Dashboard
-                    </a>
-
-                </form>
+                <input
+                    type="text"
+                    name="name"
+                    class="form-control"
+                    required
+                >
 
             </div>
 
-        </div>
+
+            <!-- PHONE -->
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Teléfono
+                </label>
+
+                <input
+                    type="text"
+                    name="phone"
+                    class="form-control"
+                >
+
+            </div>
+
+
+            <!-- EMAIL -->
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Email
+                </label>
+
+                <input
+                    type="email"
+                    name="email"
+                    class="form-control"
+                >
+
+            </div>
+
+
+            <!-- CITY -->
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Ciudad
+                </label>
+
+                <input
+                    type="text"
+                    name="city"
+                    class="form-control"
+                >
+
+            </div>
+
+
+            <!-- SOURCE -->
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Origen
+                </label>
+
+                <select
+                    name="source"
+                    class="form-select"
+                >
+
+                    <option>Google Ads</option>
+                    <option>Cold Call</option>
+                    <option>Referral</option>
+                    <option>Facebook</option>
+
+                </select>
+
+            </div>
+
+
+            <!-- STATUS -->
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Estado
+                </label>
+
+                <select
+                    name="status"
+                    class="form-select"
+                >
+
+                    <option>NEW</option>
+                    <option>CONTACTED</option>
+                    <option>INTERESTED</option>
+                    <option>ONBOARDING</option>
+                    <option>ACTIVE</option>
+                    <option>LOST</option>
+
+                </select>
+
+            </div>
+
+
+            <!-- ASSIGNED TO -->
+
+            {% if current_user.role in ["admin", "developer"] %}
+
+            <div class="mb-3">
+
+                <label class="form-label">
+
+                    <i class="bi bi-person-check-fill"></i>
+                    Assigned to
+
+                </label>
+
+                <select
+                    name="assigned_to"
+                    class="form-select"
+                >
+
+                    <option value="">
+                        Unassigned
+                    </option>
+
+                    {% for agent in agents %}
+
+                    <option value="{{ agent.id }}">
+
+                        {{ agent.username }}
+
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+                <div class="form-text">
+                    Selecciona el agente responsable de este Lead.
+                </div>
+
+            </div>
+
+            {% else %}
+
+            <div class="mb-3">
+
+                <label class="form-label">
+
+                    <i class="bi bi-person-check-fill"></i>
+                    Assigned to
+
+                </label>
+
+                <input
+                    type="text"
+                    class="form-control"
+                    value="{{ current_user.username }}"
+                    disabled
+                >
+
+                <div class="form-text">
+                    Este Lead será asignado automáticamente a ti.
+                </div>
+
+            </div>
+
+            {% endif %}
+
+
+            <!-- NOTES -->
+
+            <div class="mb-4">
+
+                <label class="form-label">
+                    Notas
+                </label>
+
+                <textarea
+                    name="notes"
+                    class="form-control"
+                    rows="4"
+                ></textarea>
+
+            </div>
+
+
+            <!-- BUTTONS -->
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+
+                <i class="bi bi-check-lg"></i>
+                Guardar Lead
+
+            </button>
+
+
+            <a
+                href="/"
+                class="btn btn-secondary"
+            >
+
+                Dashboard
+
+            </a>
+
+        </form>
 
     </div>
+
+</div>
+
+</div>
 
 {% endblock %}
