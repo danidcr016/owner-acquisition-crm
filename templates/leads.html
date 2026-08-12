@@ -57,26 +57,70 @@ Leads - Owner Acquisition CRM
 
                 <!-- SEARCH -->
 
-                <div class="col-md-6">
+            <div class="col-md-6">
 
-                    <label
-                        for="search"
-                        class="form-label"
-                    >
-                        <i class="bi bi-search"></i>
-                        Buscar por nombre
-                    </label>
+                <label
+                    for="search"
+                    class="form-label"
+                >
+                    <i class="bi bi-search"></i>
+                    Buscar lead
+                </label>
 
-                    <input
-                        type="text"
-                        id="search"
-                        name="search"
-                        class="form-control"
-                        placeholder="Ej. John Smith"
-                        value="{{ search }}"
-                    >
+               <div class="lead-search-wrapper">
+
+    <input
+        type="text"
+        id="search"
+        name="search"
+        class="form-control"
+        placeholder="Nombre, teléfono o ciudad..."
+        value="{{ search }}"
+        autocomplete="off"
+    >
+
+    <div
+        id="leadSuggestions"
+        class="lead-suggestions"
+    >
+
+        {% for lead in lead_suggestions %}
+
+            <div
+                class="lead-suggestion-item"
+                data-name="{{ lead.name }}"
+                data-phone="{{ lead.phone or '' }}"
+                data-city="{{ lead.city or '' }}"
+            >
+
+                <div class="lead-suggestion-main">
+
+                    <strong>
+                        {{ lead.name }}
+                    </strong>
+
+                    <span>
+                        {% if lead.phone %}
+                            📞 {{ lead.phone }}
+                        {% endif %}
+
+                        {% if lead.city %}
+                            {% if lead.phone %} · {% endif %}
+                            📍 {{ lead.city }}
+                        {% endif %}
+                    </span>
 
                 </div>
+
+            </div>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+            </div>
 
 
                 <!-- STATUS FILTER -->
@@ -705,5 +749,112 @@ Leads - Owner Acquisition CRM
     </div>
 
 </div>
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    const searchInput = document.getElementById("search");
+    const suggestionsBox = document.getElementById("leadSuggestions");
+    const suggestions = document.querySelectorAll(
+        ".lead-suggestion-item"
+    );
+
+    if (!searchInput || !suggestionsBox) {
+        return;
+    }
+
+    searchInput.addEventListener("focus", function () {
+
+        if (searchInput.value.trim() === "") {
+            suggestionsBox.classList.add("show");
+        }
+
+    });
+
+    searchInput.addEventListener("input", function () {
+
+        const value = searchInput.value
+            .toLowerCase()
+            .trim();
+
+        let visibleSuggestions = 0;
+
+        suggestions.forEach(function (item) {
+
+            const name = (
+                item.dataset.name || ""
+            ).toLowerCase();
+
+            const phone = (
+                item.dataset.phone || ""
+            ).toLowerCase();
+
+            const city = (
+                item.dataset.city || ""
+            ).toLowerCase();
+
+            const matches =
+                value === "" ||
+                name.includes(value) ||
+                phone.includes(value) ||
+                city.includes(value);
+
+            if (matches && visibleSuggestions < 8) {
+
+                item.style.display = "block";
+
+                visibleSuggestions++;
+
+            } else {
+
+                item.style.display = "none";
+
+            }
+
+        });
+
+        if (visibleSuggestions > 0) {
+
+            suggestionsBox.classList.add("show");
+
+        } else {
+
+            suggestionsBox.classList.remove("show");
+
+        }
+
+    });
+
+    suggestions.forEach(function (item) {
+
+        item.addEventListener("click", function () {
+
+            searchInput.value = item.dataset.name;
+
+            suggestionsBox.classList.remove("show");
+
+            searchInput.form.submit();
+
+        });
+
+    });
+
+    document.addEventListener("click", function (event) {
+
+        if (
+            !searchInput.contains(event.target) &&
+            !suggestionsBox.contains(event.target)
+        ) {
+
+            suggestionsBox.classList.remove("show");
+
+        }
+
+    });
+
+});
+
+</script>
 
 {% endblock %}

@@ -507,6 +507,31 @@ def leads():
         ""
     ).strip()
 
+    # =====================================================
+    # LEADS FOR SEARCH SUGGESTIONS
+    # =====================================================
+
+    if user.role in [
+        "admin",
+        "developer"
+    ]:
+
+        suggestion_query = Lead.query
+
+    else:
+
+        suggestion_query = Lead.query.filter_by(
+            assigned_to=user.id
+        )
+
+    lead_suggestions = suggestion_query.order_by(
+        Lead.name.asc()
+    ).all()
+
+    # =====================================================
+    # LEADS VISIBLE IN TABLE
+    # =====================================================
+
     # Admin / Developer
     if user.role in [
         "admin",
@@ -522,17 +547,25 @@ def leads():
             assigned_to=user.id
         )
 
-    # SEARCH BY NAME
+    # =====================================================
+    # SEARCH BY NAME, PHONE OR CITY
+    # =====================================================
 
     if search:
 
+        search_pattern = f"%{search}%"
+
         query = query.filter(
-            Lead.name.ilike(
-                f"%{search}%"
+            db.or_(
+                Lead.name.ilike(search_pattern),
+                Lead.phone.ilike(search_pattern),
+                Lead.city.ilike(search_pattern)
             )
         )
 
+    # =====================================================
     # FILTER BY STATUS
+    # =====================================================
 
     if status_filter:
 
@@ -540,7 +573,9 @@ def leads():
             Lead.status == status_filter
         )
 
+    # =====================================================
     # ORDER BY ID
+    # =====================================================
 
     query = query.order_by(
         Lead.id.asc()
@@ -548,7 +583,10 @@ def leads():
 
     all_leads = query.all()
 
-    # Agents for assignment dropdown
+    # =====================================================
+    # AGENTS FOR ASSIGNMENT DROPDOWN
+    # =====================================================
+
     if user.role in [
         "admin",
         "developer"
@@ -572,7 +610,9 @@ def leads():
 
         current_user=user,
 
-        agents=agents
+        agents=agents,
+
+        lead_suggestions=lead_suggestions
     )
 
 

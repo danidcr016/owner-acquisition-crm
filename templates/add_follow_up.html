@@ -63,53 +63,46 @@ Nuevo Follow-Up - Owner Acquisition CRM
         >
 
 
-            <!-- LEAD -->
+          <!-- LEAD -->
 
-            <div class="mb-3">
+<div class="mb-3">
 
-                <label
-                    for="lead_id"
-                    class="form-label"
-                >
+    <label
+        for="lead_id"
+        class="form-label"
+    >
+        <i class="bi bi-person-fill"></i>
+        Lead
+    </label>
 
-                    <i class="bi bi-person-fill"></i>
+    <select
+        id="lead_id"
+        name="lead_id"
+        class="form-select"
+        required
+    >
 
-                    Lead
+        <option value="">
+            Selecciona un propietario
+        </option>
 
-                </label>
+        {% for lead in leads %}
 
+            <option value="{{ lead.id }}">
+                {{ lead.name }}
+                {% if lead.city %}
+                    — {{ lead.city }}
+                {% endif %}
+                {% if lead.phone %}
+                    — {{ lead.phone }}
+                {% endif %}
+            </option>
 
-                <select
-                    id="lead_id"
-                    name="lead_id"
-                    class="form-select"
-                    required
-                >
+        {% endfor %}
 
-                    <option value="">
-                        Selecciona un propietario
-                    </option>
+    </select>
 
-
-                    {% for lead in leads %}
-
-                        <option value="{{ lead.id }}">
-
-                            {{ lead.name }}
-
-                            {% if lead.city %}
-                                — {{ lead.city }}
-                            {% endif %}
-
-                        </option>
-
-                    {% endfor %}
-
-
-                </select>
-
-            </div>
-
+</div>
 
             <!-- TYPE -->
 
@@ -305,6 +298,39 @@ Nuevo Follow-Up - Owner Acquisition CRM
     </div>
 
 </div>
+
+<!-- TOM SELECT -->
+
+<link
+    href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css"
+    rel="stylesheet"
+>
+
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    new TomSelect("#lead_id", {
+
+        placeholder: "Buscar propietario...",
+
+        searchField: [
+            "text"
+        ],
+
+        maxOptions: 100,
+
+        create: false,
+
+        allowEmptyOption: true
+
+    });
+
+});
+
+</script>
 
 
 {% endblock %}
