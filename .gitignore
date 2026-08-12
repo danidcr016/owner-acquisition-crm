@@ -65,6 +65,12 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Database files (contain real lead data — never commit)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
 # Scrapy stuff:
 .scrapy
 

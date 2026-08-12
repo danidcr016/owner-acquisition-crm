@@ -1,19 +1,45 @@
+import os
+import secrets
+
+from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask import Flask, render_template, request, redirect, session
 from datetime import datetime
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# Load variables from a local .env file (ignored by git).
+# In production (Render/Railway/etc.) these come from the
+# platform's environment variable settings instead.
+load_dotenv()
 
 app = Flask(__name__)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    os.environ.get("DATABASE_URL") or "sqlite:///database.db"
+)
 
-# Secret key used by Flask sessions
-app.secret_key = "owner-acquisition-secret-key"
+# Secret key used by Flask sessions. Must be set via
+# environment variable — the app refuses to start without it.
+secret_key = os.environ.get("SECRET_KEY")
+
+if not secret_key:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is not set. "
+        "Create a .env file locally (see .env.example) or set "
+        "SECRET_KEY in your hosting platform's environment settings. "
+        "You can generate one with: python -c \"import secrets; "
+        "print(secrets.token_hex(32))\""
+    )
+
+app.secret_key = secret_key
 
 # Session expires when the browser is closed
 app.config["SESSION_PERMANENT"] = False
+
+# Only enable Flask's debug mode when explicitly requested
+# via environment variable. NEVER True in production.
+DEBUG_MODE = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
 
 db = SQLAlchemy(app)
 
@@ -1158,27 +1184,30 @@ with app.app_context():
     # =====================================================
     # CREATE DEFAULT USERS
     # =====================================================
+    # Passwords come from environment variables, never from
+    # source code. If a variable isn't set, that user is
+    # skipped (with a warning) instead of falling back to a
+    # guessable default. If a user account doesn't exist yet
+    # and no password was provided for it, a random one-time
+    # password is generated and printed once so the app can
+    # still start — log in with it and change it right away.
 
     users_to_create = [
-
         {
             "username": "jeremy",
-            "password": "jeremy2004",
+            "env_var": "ADMIN_PASSWORD",
             "role": "admin"
         },
-
         {
             "username": "daniel",
-            "password": "daniel2004",
+            "env_var": "DEVELOPER_PASSWORD",
             "role": "developer"
         },
-
         {
             "username": "agent",
-            "password": "agent2004",
+            "env_var": "AGENT_PASSWORD",
             "role": "agent"
         }
-
     ]
 
     for user_data in users_to_create:
@@ -1187,23 +1216,28 @@ with app.app_context():
             username=user_data["username"]
         ).first()
 
-        if not existing_user:
+        if existing_user:
+            continue
 
-            new_user = User(
+        password = os.environ.get(user_data["env_var"])
 
-                username=user_data["username"],
-
-                password_hash=generate_password_hash(
-                    user_data["password"]
-                ),
-
-                role=user_data["role"]
-
+        if not password:
+            password = secrets.token_urlsafe(12)
+            print(
+                f"[setup] {user_data['env_var']} not set — "
+                f"generated a one-time password for "
+                f"'{user_data['username']}': {password}\n"
+                f"[setup] Log in and change it, or set "
+                f"{user_data['env_var']} and recreate the user."
             )
 
-            db.session.add(
-                new_user
-            )
+        new_user = User(
+            username=user_data["username"],
+            password_hash=generate_password_hash(password),
+            role=user_data["role"]
+        )
+
+        db.session.add(new_user)
 
     db.session.commit()
 
@@ -1215,5 +1249,5 @@ with app.app_context():
 if __name__ == "__main__":
 
     app.run(
-        debug=True
+        debug=DEBUG_MODE
     )
