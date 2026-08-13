@@ -1127,6 +1127,32 @@ def delete_follow_up(id):
 
 
 # =========================================================
+# DISCOVERY
+# =========================================================
+
+@app.route("/discovery")
+def discovery():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    user = current_user()
+
+    if not user:
+
+        session.clear()
+
+        return redirect("/login")
+
+    opportunities = []
+
+    return render_template(
+        "discovery.html",
+        opportunities=opportunities,
+        current_user=user
+    )
+
+# =========================================================
 # DATABASE SETUP + MIGRATIONS
 # =========================================================
 
@@ -1251,3 +1277,5 @@ if __name__ == "__main__":
     app.run(
         debug=DEBUG_MODE
     )
+
+    
