@@ -8,6 +8,8 @@ from datetime import datetime
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 
+from discovery_scoring import calculate_score
+
 # Load variables from a local .env file (ignored by git).
 # In production (Render/Railway/etc.) these come from the
 # platform's environment variable settings instead.
@@ -200,6 +202,53 @@ class FollowUp(db.Model):
 
         return f"<FollowUp {self.title}>"
 
+# =========================================================
+# DISCOVERY LEAD MODEL
+# =========================================================
+
+class DiscoveryLead(db.Model):
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    title = db.Column(
+        db.String(200),
+        nullable=False
+    )
+
+    description = db.Column(
+        db.Text
+    )
+
+    city = db.Column(
+        db.String(100)
+    )
+
+    source = db.Column(
+        db.String(100)
+    )
+
+    url = db.Column(
+        db.String(500)
+    )
+
+    score = db.Column(
+        db.Integer,
+        default=0
+    )
+
+    found_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    def __repr__(self):
+
+        return f"<DiscoveryLead {self.title}>"
+
+
 
 # =========================================================
 # HELPER FUNCTIONS
@@ -259,6 +308,47 @@ def get_agents():
     ).order_by(
         User.username.asc()
     ).all()
+
+def create_discovery_lead(
+    title,
+    description,
+    city,
+    source,
+    url,
+    score=None
+):
+
+    if score is None:
+
+        score = calculate_score(
+            description or ""
+        )
+
+    discovery_lead = DiscoveryLead(
+
+        title=title,
+
+        description=description,
+
+        city=city,
+
+        source=source,
+
+        url=url,
+
+        score=score,
+
+        found_at=datetime.utcnow()
+
+    )
+
+    db.session.add(
+        discovery_lead
+    )
+
+    db.session.commit()
+
+    return discovery_lead
 
 # =========================================================
 # LOGIN
@@ -1144,13 +1234,17 @@ def discovery():
 
         return redirect("/login")
 
-    opportunities = []
+    opportunities = DiscoveryLead.query.order_by(
+        DiscoveryLead.score.desc()
+    ).all()
 
     return render_template(
         "discovery.html",
         opportunities=opportunities,
         current_user=user
     )
+
+
 
 # =========================================================
 # DATABASE SETUP + MIGRATIONS
