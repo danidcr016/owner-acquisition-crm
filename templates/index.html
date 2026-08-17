@@ -19,21 +19,44 @@ Dashboard - Owner Acquisition CRM
 
     <div class="card-body">
 
+        <div class="d-flex justify-content-between align-items-start mb-4">
 
-        <h1 class="mb-3">
+            <div>
 
-            <i class="bi bi-buildings-fill"></i>
+                <h1 class="mb-2">
 
-            Owner Acquisition CRM
+                    <i class="bi bi-buildings-fill"></i>
 
-        </h1>
+                    Owner Acquisition CRM
+
+                </h1>
+
+                <p class="text-muted mb-0">
+
+                    Gestiona propietarios, llamadas y seguimientos.
+
+                </p>
+
+            </div>
 
 
-        <p class="text-muted">
+            <div class="text-end">
 
-            Gestiona propietarios, llamadas y seguimientos.
+                <small class="text-muted d-block">
 
-        </p>
+                    🌴 San Diego Time
+
+                </small>
+
+                <h4 id="sanDiegoClock" class="mb-0">
+
+                    --
+
+                </h4>
+
+            </div>
+
+        </div>
 
 
         <a
@@ -59,47 +82,40 @@ Dashboard - Owner Acquisition CRM
 
         </a>
 
+
         <a
             href="/follow-ups"
             class="btn btn-warning"
         >
-           <i class="bi bi-calendar-check-fill"></i>
 
-           Follow-Ups
+            <i class="bi bi-calendar-check-fill"></i>
+
+            Follow-Ups
 
         </a>
 
-       <a
+
+        <a
             href="/discovery"
             class="btn btn-dark"
         >
+
             <i class="bi bi-radar"></i>
 
+            Discovery
+
         </a>
+
 
     </div>
 
 </div>
+
 
 <!-- =========================
      TOTAL
 ========================== -->
 
-<div class="card shadow-sm mb-4">
-
-    <div class="card-body text-center">
-
-        <h6 class="text-muted">
-            🌴 San Diego Time
-        </h6>
-
-        <h3 id="sanDiegoClock">
-            --
-        </h3>
-
-    </div>
-
-</div>
 
 <div class="row mb-4">
 
@@ -380,6 +396,7 @@ Dashboard - Owner Acquisition CRM
 
 
 {% endblock %}
+
 
 {% block scripts %}
 
