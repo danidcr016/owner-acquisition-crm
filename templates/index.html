@@ -81,10 +81,25 @@ Dashboard - Owner Acquisition CRM
 
 </div>
 
-
 <!-- =========================
      TOTAL
 ========================== -->
+
+<div class="card shadow-sm mb-4">
+
+    <div class="card-body text-center">
+
+        <h6 class="text-muted">
+            🌴 San Diego Time
+        </h6>
+
+        <h3 id="sanDiegoClock">
+            --
+        </h3>
+
+    </div>
+
+</div>
 
 <div class="row mb-4">
 
@@ -363,5 +378,42 @@ Dashboard - Owner Acquisition CRM
 
 </div>
 
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+
+function updateSanDiegoClock() {
+
+    const options = {
+
+        timeZone: "America/Los_Angeles",
+
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+
+    };
+
+    const time = new Date().toLocaleTimeString(
+        "en-US",
+        options
+    );
+
+    document.getElementById(
+        "sanDiegoClock"
+    ).textContent = time;
+}
+
+updateSanDiegoClock();
+
+setInterval(
+    updateSanDiegoClock,
+    1000
+);
+
+</script>
 
 {% endblock %}
