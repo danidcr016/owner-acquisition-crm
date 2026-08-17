@@ -9,6 +9,7 @@ from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from discovery_scoring import calculate_score
+from discovery import discovery_engine
 
 # Load variables from a local .env file (ignored by git).
 # In production (Render/Railway/etc.) these come from the
@@ -318,6 +319,16 @@ def create_discovery_lead(
     score=None
 ):
 
+    # Check if this opportunity already exists
+    existing_lead = DiscoveryLead.query.filter_by(
+        url=url
+    ).first()
+
+    if existing_lead:
+
+        return existing_lead
+
+    # Calculate score if one was not provided
     if score is None:
 
         score = calculate_score(
