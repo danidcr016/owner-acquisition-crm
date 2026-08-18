@@ -20,7 +20,7 @@ HEADERS = {
 MAX_ADS = 40
 
 # Segundos de espera entre cada petición a un anuncio individual
-DELAY_BETWEEN_REQUESTS = 2
+DELAY_BETWEEN_REQUESTS = 1.5
 
 
 def get_ad_detail(url):
