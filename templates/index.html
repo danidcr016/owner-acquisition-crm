@@ -94,17 +94,21 @@ Dashboard - Owner Acquisition CRM
 
         </a>
 
+    {% if session.get("role") != "agent" %}
 
         <a
-            href="/discovery"
-            class="btn btn-dark"
+        href="/discovery"
+        class="btn btn-dark"
         >
 
-            <i class="bi bi-radar"></i>
+        <i class="bi bi-radar"></i>
 
-            Discovery
+        Discovery
 
         </a>
+
+    {% endif %}
+       
 
 
     </div>

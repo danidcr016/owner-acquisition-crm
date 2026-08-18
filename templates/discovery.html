@@ -1,3 +1,4 @@
+```html
 {% extends "base.html" %}
 
 {% block title %}
@@ -21,14 +22,28 @@ Lead Discovery
 
 </div>
 
-<div>
 
-        <a
-            href="/"
-            class="btn btn-secondary">
-            <i class="bi bi-house-fill"></i>
-            Dashboard
-        </a>
+<div class="d-flex gap-2 mb-4">
+
+    <a href="/" class="btn btn-secondary">
+        <i class="bi bi-house-fill"></i>
+        Dashboard
+    </a>
+
+    <form
+        action="/discovery/run-craigslist"
+        method="POST"
+    >
+
+        <button
+            type="submit"
+            class="btn btn-dark"
+        >
+            <i class="bi bi-search"></i>
+            Run Craigslist Scan
+        </button>
+
+    </form>
 
 </div>
 
@@ -69,19 +84,63 @@ Lead Discovery
                             </strong>
                         </td>
 
+
+                        <!-- DESCRIPTION -->
+
                         <td>
+
+                            {% if item.description %}
+
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#description-{{ item.id }}"
+                                aria-expanded="false"
+                                aria-controls="description-{{ item.id }}"
+                            >
+                                <i class="bi bi-eye"></i>
+                                View
+                            </button>
+
+                            <div
+                                class="collapse mt-2"
+                                id="description-{{ item.id }}"
+                            >
+                                <div
+                                    class="p-3 bg-light rounded text-muted"
+                                    style="min-width: 300px; max-width: 500px;"
+                                >
+                                    {{ item.description }}
+                                </div>
+                            </div>
+
+                            {% else %}
+
                             <span class="text-muted">
-                                {{ item.description }}
+                                No description
                             </span>
+
+                            {% endif %}
+
                         </td>
+
+
+                        <!-- CITY -->
 
                         <td>
                             {{ item.city }}
                         </td>
 
+
+                        <!-- SOURCE -->
+
                         <td>
                             {{ item.source }}
                         </td>
+
+
+                        <!-- SCORE -->
 
                         <td>
 
@@ -107,9 +166,15 @@ Lead Discovery
 
                         </td>
 
+
+                        <!-- DATE -->
+
                         <td>
                             {{ item.found_at.strftime("%d/%m/%Y") }}
                         </td>
+
+
+                        <!-- ACTION -->
 
                         <td>
 
@@ -167,4 +232,6 @@ Lead Discovery
 
 </div>
 
+
 {% endblock %}
+```

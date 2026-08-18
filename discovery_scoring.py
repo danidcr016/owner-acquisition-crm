@@ -2,15 +2,17 @@ POSITIVE_KEYWORDS = {
     "furnished": 30,
     "short-term": 40,
     "monthly": 30,
-    "month-to-month": 30,
-    "utilities included": 15
+    "month-to-month": 30
 }
 
 
 NEGATIVE_KEYWORDS = {
     "12 month lease": -50,
+    "lease length: one year": -50,
+    "lease term: one year": -50,
     "unfurnished": -25
 }
+
 
 def calculate_score(description):
 
@@ -18,9 +20,12 @@ def calculate_score(description):
 
     description = description.lower()
 
+    # Evitar que "furnished patio" cuente como amueblado
+    cleaned_description = description.replace("furnished patio", "")
+
     for keyword, points in POSITIVE_KEYWORDS.items():
 
-        if keyword in description:
+        if keyword in cleaned_description:
             score += points
 
     for keyword, points in NEGATIVE_KEYWORDS.items():
@@ -31,6 +36,7 @@ def calculate_score(description):
     score = max(0, min(score, 100))
 
     return score
+
 
 if __name__ == "__main__":
 

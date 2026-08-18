@@ -1245,6 +1245,10 @@ def discovery():
 
         return redirect("/login")
 
+    if user.role == "agent":
+
+        return redirect("/")
+
     opportunities = DiscoveryLead.query.order_by(
         DiscoveryLead.score.desc()
     ).all()
@@ -1254,6 +1258,34 @@ def discovery():
         opportunities=opportunities,
         current_user=user
     )
+
+# =========================================================
+# DISCOVERY - RUN CRAIGSLIST SCAN (TEMPORARY, FOR TESTING)
+# =========================================================
+
+@app.route(
+    "/discovery/run-craigslist",
+    methods=["POST"]
+)
+def run_craigslist_scan():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    user = current_user()
+
+    if not user or user.role == "agent":
+
+        return "Access denied", 403
+
+    ads = discovery_engine.scan()
+
+    discovery_engine.process_ads(
+        ads,
+        create_discovery_lead
+    )
+
+    return redirect("/discovery")
 
 
 

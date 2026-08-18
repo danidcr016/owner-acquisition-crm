@@ -1,16 +1,19 @@
 from discovery_scoring import calculate_score
-from discovery.sources import test_source
+from discovery.sources import test_source, craigslist_source
+
 
 def scan():
 
-    return test_source.scan()
+    return craigslist_source.scan()
+
 
 def analyze(ad):
 
-    description = ad.get(
-        "description",
-        ""
-    )
+    title = ad.get("title", "")
+
+    original_description = ad.get("description", "")
+
+    description = f"{title}. {original_description}"
 
     return {
         "title": ad.get("title", ""),
@@ -28,6 +31,7 @@ def score(ad):
     )
 
     return ad
+
 
 def process_ads(ads, save_function):
 
@@ -64,5 +68,4 @@ if __name__ == "__main__":
         scored_ad = score(analyzed_ad)
 
         print(scored_ad)
-
   
