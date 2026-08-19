@@ -1276,50 +1276,24 @@ def discovery():
     )
 
 
-
-
 def run_craigslist_background():
 
     try:
 
-        print("========================================")
-        print("Starting Craigslist background scan...")
-        print("========================================")
-
         ads = discovery_engine.scan()
-
-        print(
-            f"Craigslist returned {len(ads)} ads."
-        )
 
         with app.app_context():
 
-            saved_ads = discovery_engine.process_ads(
+            discovery_engine.process_ads(
                 ads,
                 create_discovery_lead
             )
 
-            print(
-                f"Successfully processed "
-                f"{len(saved_ads)} ads."
-            )
-
-            print(
-                f"DiscoveryLead count in database: "
-                f"{DiscoveryLead.query.count()}"
-            )
-
-        print("========================================")
-        print("Craigslist scan completed.")
-        print("========================================")
-
     except Exception as e:
 
-        print("========================================")
-        print("CRAWLISLIST SCAN FAILED")
-        print(type(e).__name__)
-        print(str(e))
-        print("========================================")
+        print("Craigslist scan failed:", e)
+
+
 
 
 
