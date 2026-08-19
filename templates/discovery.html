@@ -64,6 +64,7 @@ Lead Discovery
                         <th>Description</th>
                         <th>City</th>
                         <th>Source</th>
+                        <th>Contact</th>
                         <th>Score</th>
                         <th>Date</th>
                         <th>Action</th>
@@ -136,6 +137,29 @@ Lead Discovery
 
                         <td>
                             {{ item.source }}
+                        </td>
+
+
+                        <!-- CONTACT -->
+
+                        <td>
+
+                            {% if item.phone %}
+
+                                <span class="badge bg-success fs-6">
+                                    <i class="bi bi-telephone-fill"></i>
+                                    {{ item.phone }}
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge bg-secondary">
+                                    <i class="bi bi-telephone-x"></i>
+                                    No phone
+                                </span>
+
+                            {% endif %}
+
                         </td>
 
 

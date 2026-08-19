@@ -228,6 +228,10 @@ class DiscoveryLead(db.Model):
         db.String(100)
     )
 
+    phone = db.Column(
+        db.String(50)
+    )
+
     source = db.Column(
         db.String(100)
     )
@@ -317,6 +321,7 @@ def create_discovery_lead(
     city,
     source,
     url,
+    phone=None,
     score=None
 ):
 
@@ -325,7 +330,15 @@ def create_discovery_lead(
         url=url
     ).first()
 
+    # If it already exists, update missing information
     if existing_lead:
+
+        # Update phone if a new phone was found
+        if phone and not existing_lead.phone:
+
+            existing_lead.phone = phone
+
+            db.session.commit()
 
         return existing_lead
 
@@ -343,6 +356,8 @@ def create_discovery_lead(
         description=description,
 
         city=city,
+
+        phone=phone,
 
         source=source,
 
@@ -1377,6 +1392,35 @@ with app.app_context():
             )
 
             connection.commit()
+
+
+    # =====================================================
+    # DISCOVERY LEAD TABLE MIGRATION
+    # =====================================================
+
+    discovery_lead_columns = [
+
+        column["name"]
+
+        for column in inspector.get_columns(
+            "discovery_lead"
+        )
+
+    ]
+
+    # Add phone if it doesn't exist
+    if "phone" not in discovery_lead_columns:
+
+        with db.engine.connect() as connection:
+
+            connection.execute(
+                text(
+                    "ALTER TABLE discovery_lead "
+                    "ADD COLUMN phone VARCHAR(50)"
+                )
+            )
+
+            connection.commit()        
 
     # =====================================================
     # CREATE DEFAULT USERS
