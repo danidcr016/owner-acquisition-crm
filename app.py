@@ -1,5 +1,6 @@
 import os
 import secrets
+import threading
 
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
@@ -1259,8 +1260,40 @@ def discovery():
         current_user=user
     )
 
+
+
+
+
+
+def run_craigslist_background():
+
+    try:
+
+        print("Starting Craigslist background scan...")
+
+        ads = discovery_engine.scan()
+
+        with app.app_context():
+
+            discovery_engine.process_ads(
+                ads,
+                create_discovery_lead
+            )
+
+        print(
+            f"Craigslist scan completed. "
+            f"{len(ads)} ads processed."
+        )
+
+    except Exception as e:
+
+        print(
+            "Craigslist background scan failed:",
+            e
+        )
+
 # =========================================================
-# DISCOVERY - RUN CRAIGSLIST SCAN (TEMPORARY, FOR TESTING)
+# DISCOVERY - RUN CRAIGSLIST SCAN
 # =========================================================
 
 @app.route(
@@ -1278,12 +1311,13 @@ def run_craigslist_scan():
 
         return "Access denied", 403
 
-    ads = discovery_engine.scan()
-
-    discovery_engine.process_ads(
-        ads,
-        create_discovery_lead
+    thread = threading.Thread(
+        target=run_craigslist_background
     )
+
+    thread.daemon = True
+
+    thread.start()
 
     return redirect("/discovery")
 
