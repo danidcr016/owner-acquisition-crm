@@ -1307,6 +1307,34 @@ def run_craigslist_background():
             e
         )
 
+
+# =========================================================
+# DELETE DISCOVERY LEAD
+# ADMIN / DEVELOPER ONLY
+# =========================================================
+
+@app.route(
+    "/delete-discovery/<int:id>",
+    methods=["POST"]
+)
+def delete_discovery(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    if not is_admin_or_developer():
+
+        return "Access denied", 403
+
+    discovery_lead = DiscoveryLead.query.get_or_404(id)
+
+    db.session.delete(discovery_lead)
+
+    db.session.commit()
+
+    return redirect("/discovery")
+
+
 # =========================================================
 # DISCOVERY - RUN CRAIGSLIST SCAN
 # =========================================================
