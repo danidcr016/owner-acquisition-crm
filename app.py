@@ -1497,6 +1497,18 @@ with app.app_context():
         ).first()
 
         if existing_user:
+            # TEMPORARY: reset Daniel's password in PostgreSQL
+            # using the DEVELOPER_PASSWORD environment variable.
+            if user_data["username"] == "daniel":
+                reset_password = os.environ.get("DEVELOPER_PASSWORD")
+
+                if reset_password:
+                    existing_user.password_hash = generate_password_hash(
+                        reset_password
+                    )
+                    print("[setup] Temporarily reset password for 'daniel'.")
+                    db.session.commit()
+
             continue
 
         password = os.environ.get(user_data["env_var"])
