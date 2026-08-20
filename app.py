@@ -393,9 +393,14 @@ def login():
 
         password = request.form["password"]
 
+        print("LOGIN DEBUG - username:", repr(username))
+        print("LOGIN DEBUG - password length:", len(password))
+
         user = User.query.filter_by(
             username=username
         ).first()
+
+        print("LOGIN DEBUG - user found:", user is not None)
 
         if user and check_password_hash(
             user.password_hash,
