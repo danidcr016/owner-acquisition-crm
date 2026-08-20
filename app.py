@@ -1367,16 +1367,9 @@ def run_craigslist_scan():
     user = current_user()
 
     if not user or user.role == "agent":
-
         return "Access denied", 403
 
-    thread = threading.Thread(
-        target=run_craigslist_background
-    )
-
-    thread.daemon = True
-
-    thread.start()
+    run_craigslist_background()
 
     return redirect("/discovery")
 
