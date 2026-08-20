@@ -1,9 +1,12 @@
 import time
 import re
+
 from urllib.parse import urljoin
 
 import requests
+
 from bs4 import BeautifulSoup
+
 from playwright.sync_api import sync_playwright
 
 
@@ -12,6 +15,7 @@ BASE_URL = (
     "?query=furnished"
     "&s={offset}"
 )
+
 
 HEADERS = {
     "User-Agent": (
@@ -26,7 +30,7 @@ HEADERS = {
 # CONFIGURATION
 # =========================================================
 
-# Número de anuncios que procesamos en cada ejecución
+# Número de anuncios NUEVOS que procesamos en cada ejecución
 MAX_ADS = 10
 
 # Archivo donde guardamos la posición del último lote
@@ -41,17 +45,17 @@ DELAY_BETWEEN_REQUESTS = 1.5
 # =========================================================
 
 def get_ad_detail(page, url):
+
     """
     Abre un anuncio de Craigslist con Playwright.
 
     Extrae:
+
     - descripción
     - fecha de publicación
     - teléfono
 
     Si existe "show contact info", lo pulsa.
-    Craigslist puede recargar la página y revelar
-    el teléfono dentro de la descripción.
     """
 
     try:
@@ -288,12 +292,16 @@ def get_ad_detail(page, url):
         # =====================================================
 
         return {
+
             "description": (
                 updated_description
                 or description
             ),
+
             "posted_at": posted_at,
+
             "phone": phone
+
         }
 
     except Exception as e:
@@ -305,9 +313,13 @@ def get_ad_detail(page, url):
         )
 
         return {
+
             "description": "",
+
             "posted_at": None,
+
             "phone": None
+
         }
 
 
@@ -316,6 +328,7 @@ def get_ad_detail(page, url):
 # =========================================================
 
 def get_offset():
+
     """
     Obtiene el offset actual.
     """
@@ -341,6 +354,7 @@ def get_offset():
 
 
 def save_offset(offset):
+
     """
     Guarda el offset para el siguiente scan.
     """
@@ -361,17 +375,28 @@ def save_offset(offset):
 # =========================================================
 
 def scan(already_processed=None):
+
     """
-    Busca 10 anuncios empezando desde el offset actual.
+    Busca MAX_ADS anuncios NUEVOS empezando desde
+    el offset actual.
+
+    Los anuncios que ya existen en la base de datos
+    se saltan automáticamente.
 
     Ejecución 1:
-        anuncios 0-9
+
+        offset 0
+        → busca anuncios nuevos
 
     Ejecución 2:
-        anuncios 10-19
+
+        offset 10
+        → busca anuncios nuevos
 
     Ejecución 3:
-        anuncios 20-29
+
+        offset 20
+        → busca anuncios nuevos
 
     etc.
     """
@@ -397,6 +422,10 @@ def scan(already_processed=None):
     print(
         f"Search URL: {search_url}"
     )
+
+    # =====================================================
+    # REQUEST SEARCH PAGE
+    # =====================================================
 
     response = requests.get(
         search_url,
@@ -430,6 +459,14 @@ def scan(already_processed=None):
         f"Listings found on search page: {len(listings)}"
     )
 
+    if not listings:
+
+        print(
+            "No listings found."
+        )
+
+        return []
+
     ads = []
 
     # =====================================================
@@ -449,10 +486,18 @@ def scan(already_processed=None):
         try:
 
             # =================================================
-            # PROCESS CURRENT BATCH
+            # PROCESS LISTINGS
             # =================================================
 
-            for listing in listings[:MAX_ADS]:
+            for listing in listings:
+
+                # =============================================
+                # STOP WHEN WE HAVE ENOUGH NEW ADS
+                # =============================================
+
+                if len(ads) >= MAX_ADS:
+
+                    break
 
                 # =============================================
                 # REAL AD URL
@@ -473,6 +518,35 @@ def scan(already_processed=None):
                 )
 
                 # =============================================
+                # SKIP ALREADY PROCESSED ADS
+                # =============================================
+
+                if already_processed:
+
+                    try:
+
+                        if already_processed(ad_url):
+
+                            print(
+                                f"Already processed, skipping: "
+                                f"{ad_url}"
+                            )
+
+                            continue
+
+                    except Exception as e:
+
+                        print(
+                            "Error checking "
+                            "already_processed:",
+                            repr(e)
+                        )
+
+                        # If the database check fails,
+                        # skip this ad for safety.
+                        continue
+
+                # =============================================
                 # TITLE
                 # =============================================
 
@@ -482,11 +556,15 @@ def scan(already_processed=None):
                 )
 
                 title = (
+
                     title_div.get_text(
                         strip=True
                     )
+
                     if title_div
+
                     else ""
+
                 )
 
                 # =============================================
@@ -499,11 +577,15 @@ def scan(already_processed=None):
                 )
 
                 city = (
+
                     location_div.get_text(
                         strip=True
                     )
+
                     if location_div
+
                     else "San Diego"
+
                 )
 
                 # =============================================
@@ -520,6 +602,7 @@ def scan(already_processed=None):
                 # =============================================
 
                 ad = {
+
                     "title": title,
 
                     "description": (
@@ -540,6 +623,7 @@ def scan(already_processed=None):
                     "phone": (
                         detail["phone"]
                     )
+
                 }
 
                 ads.append(
@@ -587,7 +671,7 @@ def scan(already_processed=None):
 
     print(
         f"Craigslist scan completed. "
-        f"{len(ads)} ads processed."
+        f"{len(ads)} new ads processed."
     )
 
     return ads
