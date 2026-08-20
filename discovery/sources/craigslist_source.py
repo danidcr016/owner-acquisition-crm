@@ -31,7 +31,7 @@ HEADERS = {
 # =========================================================
 
 # Número de anuncios NUEVOS que procesamos en cada ejecución
-MAX_ADS = 10
+MAX_ADS = 30
 
 # Archivo donde guardamos la posición del último lote
 OFFSET_FILE = "craigslist_offset.txt"
