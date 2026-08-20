@@ -393,19 +393,36 @@ def login():
 
         password = request.form["password"]
 
-        print("LOGIN DEBUG - username:", repr(username))
-        print("LOGIN DEBUG - password length:", len(password))
+        # TEMPORARY LOGIN DEBUG
+        # Never print the actual password or password hash.
+        print("=== LOGIN DEBUG ===")
+        print("Database driver:", db.engine.url.drivername)
+        print("Database name:", db.engine.url.database)
+        print("Username received:", repr(username))
+        print("Password length:", len(password))
 
         user = User.query.filter_by(
             username=username
         ).first()
 
-        print("LOGIN DEBUG - user found:", user is not None)
+        print("User found:", user is not None)
 
-        if user and check_password_hash(
-            user.password_hash,
-            password
-        ):
+        if user:
+            print("User ID:", user.id)
+            print("User role:", user.role)
+            print("Password hash exists:", bool(user.password_hash))
+
+        password_ok = False
+
+        if user:
+            password_ok = check_password_hash(
+                user.password_hash,
+                password
+            )
+
+        print("Password correct:", password_ok)
+
+        if user and password_ok:
 
             session.clear()
 
@@ -1514,5 +1531,3 @@ if __name__ == "__main__":
     app.run(
         debug=DEBUG_MODE
     )
-
-    
