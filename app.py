@@ -23,6 +23,13 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
     os.environ.get("DATABASE_URL") or "sqlite:///database.db"
 )
 
+# Keep PostgreSQL connections healthy on Render
+if os.environ.get("DATABASE_URL"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300
+    }
+
 # Secret key used by Flask sessions. Must be set via
 # environment variable — the app refuses to start without it.
 secret_key = os.environ.get("SECRET_KEY")
