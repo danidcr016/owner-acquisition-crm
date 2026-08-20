@@ -1302,9 +1302,17 @@ def run_craigslist_background():
 
     try:
 
-        ads = discovery_engine.scan()
-
         with app.app_context():
+
+            def already_processed(url):
+
+                return DiscoveryLead.query.filter_by(
+                    url=url
+                ).first() is not None
+
+            ads = discovery_engine.scan(
+                already_processed=already_processed
+            )
 
             discovery_engine.process_ads(
                 ads,
@@ -1314,9 +1322,6 @@ def run_craigslist_background():
     except Exception as e:
 
         print("Craigslist scan failed:", e)
-
-
-
 
 
 # =========================================================

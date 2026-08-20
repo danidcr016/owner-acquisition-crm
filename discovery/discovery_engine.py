@@ -6,9 +6,11 @@ from discovery.sources import test_source, craigslist_source
 # SCAN
 # =========================================================
 
-def scan():
+def scan(already_processed=None):
 
-    return craigslist_source.scan()
+    return craigslist_source.scan(
+        already_processed=already_processed
+    )
 
 
 # =========================================================

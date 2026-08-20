@@ -360,7 +360,7 @@ def save_offset(offset):
 # SCAN
 # =========================================================
 
-def scan():
+def scan(already_processed=None):
     """
     Busca 10 anuncios empezando desde el offset actual.
 
