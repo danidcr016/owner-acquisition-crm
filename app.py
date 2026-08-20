@@ -1376,11 +1376,15 @@ def run_craigslist_scan():
     if not user or user.role == "agent":
         return "Access denied", 403
 
-    run_craigslist_background()
+    thread = threading.Thread(
+        target=run_craigslist_background
+    )
+
+    thread.daemon = True
+
+    thread.start()
 
     return redirect("/discovery")
-
-
 
 # =========================================================
 # DATABASE SETUP + MIGRATIONS
