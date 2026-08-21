@@ -4,7 +4,7 @@ import threading
 
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, jsonify
 from datetime import datetime
 from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,29 +12,44 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from discovery_scoring import calculate_score
 from discovery import discovery_engine
 
-# Load variables from a local .env file (ignored by git).
-# In production (Render/Railway/etc.) these come from the
-# platform's environment variable settings instead.
+
+# =========================================================
+# LOAD ENVIRONMENT VARIABLES
+# =========================================================
+
 load_dotenv()
 
+
+# =========================================================
+# FLASK APP
+# =========================================================
+
 app = Flask(__name__)
+
 
 app.config["SQLALCHEMY_DATABASE_URI"] = (
     os.environ.get("DATABASE_URL") or "sqlite:///database.db"
 )
 
+
 # Keep PostgreSQL connections healthy on Render
 if os.environ.get("DATABASE_URL"):
+
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_pre_ping": True,
         "pool_recycle": 300
     }
 
-# Secret key used by Flask sessions. Must be set via
-# environment variable — the app refuses to start without it.
+
+# =========================================================
+# SECRET KEY
+# =========================================================
+
 secret_key = os.environ.get("SECRET_KEY")
 
+
 if not secret_key:
+
     raise RuntimeError(
         "SECRET_KEY environment variable is not set. "
         "Create a .env file locally (see .env.example) or set "
@@ -43,16 +58,50 @@ if not secret_key:
         "print(secrets.token_hex(32))\""
     )
 
+
 app.secret_key = secret_key
 
-# Session expires when the browser is closed
+
+# Session expires when browser is closed
 app.config["SESSION_PERMANENT"] = False
 
-# Only enable Flask's debug mode when explicitly requested
-# via environment variable. NEVER True in production.
-DEBUG_MODE = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+
+# =========================================================
+# DEBUG MODE
+# =========================================================
+
+DEBUG_MODE = os.environ.get(
+    "FLASK_DEBUG",
+    "false"
+).lower() == "true"
+
+
+# =========================================================
+# DATABASE
+# =========================================================
 
 db = SQLAlchemy(app)
+
+
+# =========================================================
+# CRAIGSLIST SCAN STATUS
+# =========================================================
+
+craigslist_scan_status = {
+
+    "running": False,
+
+    "processed": 0,
+
+    "added": 0,
+
+    "finished": False,
+
+    "error": None
+}
+
+
+craigslist_scan_lock = threading.Lock()
 
 
 # =========================================================
@@ -132,7 +181,6 @@ class Lead(db.Model):
         default=datetime.utcnow
     )
 
-    # Agent assigned to this lead
     assigned_to = db.Column(
         db.Integer,
         db.ForeignKey("user.id"),
@@ -211,6 +259,7 @@ class FollowUp(db.Model):
 
         return f"<FollowUp {self.title}>"
 
+
 # =========================================================
 # DISCOVERY LEAD MODEL
 # =========================================================
@@ -262,7 +311,6 @@ class DiscoveryLead(db.Model):
         return f"<DiscoveryLead {self.title}>"
 
 
-
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
@@ -300,14 +348,12 @@ def can_access_lead(lead):
     if not user:
         return False
 
-    # Admin and developer can access everything
     if user.role in [
         "admin",
         "developer"
     ]:
         return True
 
-    # Agents can only access their own leads
     return lead.assigned_to == user.id
 
 
@@ -322,6 +368,11 @@ def get_agents():
         User.username.asc()
     ).all()
 
+
+# =========================================================
+# CREATE DISCOVERY LEAD
+# =========================================================
+
 def create_discovery_lead(
     title,
     description,
@@ -332,15 +383,15 @@ def create_discovery_lead(
     score=None
 ):
 
-    # Check if this opportunity already exists
     existing_lead = DiscoveryLead.query.filter_by(
         url=url
     ).first()
 
-    # If it already exists, update missing information
+
+    # Existing opportunity
     if existing_lead:
 
-        # Update phone if a new phone was found
+        # Add phone if we did not have one before
         if phone and not existing_lead.phone:
 
             existing_lead.phone = phone
@@ -349,12 +400,14 @@ def create_discovery_lead(
 
         return existing_lead
 
-    # Calculate score if one was not provided
+
+    # Calculate score if not provided
     if score is None:
 
         score = calculate_score(
             description or ""
         )
+
 
     discovery_lead = DiscoveryLead(
 
@@ -376,13 +429,16 @@ def create_discovery_lead(
 
     )
 
+
     db.session.add(
         discovery_lead
     )
 
     db.session.commit()
 
+
     return discovery_lead
+
 
 # =========================================================
 # LOGIN
@@ -400,50 +456,96 @@ def login():
 
         password = request.form["password"]
 
-        # TEMPORARY LOGIN DEBUG
-        # Never print the actual password or password hash.
+
         print("=== LOGIN DEBUG ===")
-        print("Database driver:", db.engine.url.drivername)
-        print("Database name:", db.engine.url.database)
-        print("Username received:", repr(username))
-        print("Password length:", len(password))
+
+        print(
+            "Database driver:",
+            db.engine.url.drivername
+        )
+
+        print(
+            "Database name:",
+            db.engine.url.database
+        )
+
+        print(
+            "Username received:",
+            repr(username)
+        )
+
+        print(
+            "Password length:",
+            len(password)
+        )
+
 
         user = User.query.filter_by(
             username=username
         ).first()
 
-        print("User found:", user is not None)
+
+        print(
+            "User found:",
+            user is not None
+        )
+
 
         if user:
-            print("User ID:", user.id)
-            print("User role:", user.role)
-            print("Password hash exists:", bool(user.password_hash))
+
+            print(
+                "User ID:",
+                user.id
+            )
+
+            print(
+                "User role:",
+                user.role
+            )
+
+            print(
+                "Password hash exists:",
+                bool(user.password_hash)
+            )
+
 
         password_ok = False
 
+
         if user:
+
             password_ok = check_password_hash(
                 user.password_hash,
                 password
             )
 
-        print("Password correct:", password_ok)
+
+        print(
+            "Password correct:",
+            password_ok
+        )
+
 
         if user and password_ok:
 
             session.clear()
 
             session["logged_in"] = True
+
             session["user_id"] = user.id
+
             session["username"] = user.username
+
             session["role"] = user.role
 
             return redirect("/")
+
 
         return render_template(
             "login.html",
             error="Invalid username or password."
         )
+
 
     return render_template(
         "login.html"
@@ -472,7 +574,9 @@ def home():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -480,7 +584,7 @@ def home():
 
         return redirect("/login")
 
-    # Admin / Developer see everything
+
     if user.role in [
         "admin",
         "developer"
@@ -488,12 +592,12 @@ def home():
 
         lead_query = Lead.query
 
-    # Agent only sees assigned leads
     else:
 
         lead_query = Lead.query.filter_by(
             assigned_to=user.id
         )
+
 
     total_leads = lead_query.count()
 
@@ -521,6 +625,7 @@ def home():
         status="LOST"
     ).count()
 
+
     return render_template(
 
         "index.html",
@@ -540,6 +645,7 @@ def home():
         lost_leads=lost_leads,
 
         current_user=user
+
     )
 
 
@@ -556,7 +662,9 @@ def add_lead():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -564,9 +672,9 @@ def add_lead():
 
         return redirect("/login")
 
+
     if request.method == "POST":
 
-        # Admin / developer can assign a lead
         if user.role in [
             "admin",
             "developer"
@@ -576,16 +684,22 @@ def add_lead():
                 "assigned_to"
             )
 
+
             if assigned_to:
 
                 assigned_user = User.query.filter(
                     User.id == int(assigned_to),
-                    User.role.in_(["agent", "admin"])
+                    User.role.in_([
+                        "agent",
+                        "admin"
+                    ])
                 ).first()
+
 
                 if not assigned_user:
 
                     return "Invalid agent", 400
+
 
                 assigned_to = assigned_user.id
 
@@ -593,10 +707,10 @@ def add_lead():
 
                 assigned_to = None
 
-        # Agent automatically gets the lead assigned to themselves
         else:
 
             assigned_to = user.id
+
 
         lead = Lead(
 
@@ -620,15 +734,17 @@ def add_lead():
 
         )
 
+
         db.session.add(lead)
 
         db.session.commit()
+
 
         return render_template(
             "success.html"
         )
 
-    # Only admin/developer need agent selector
+
     if user.role in [
         "admin",
         "developer"
@@ -640,6 +756,7 @@ def add_lead():
 
         agents = []
 
+
     return render_template(
 
         "add_lead.html",
@@ -647,12 +764,12 @@ def add_lead():
         agents=agents,
 
         current_user=user
+
     )
 
 
 # =========================================================
 # VIEW LEADS
-# SEARCH + FILTER
 # =========================================================
 
 @app.route("/leads")
@@ -661,7 +778,9 @@ def leads():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -669,20 +788,20 @@ def leads():
 
         return redirect("/login")
 
+
     search = request.args.get(
         "search",
         ""
     ).strip()
+
 
     status_filter = request.args.get(
         "status",
         ""
     ).strip()
 
-    # =====================================================
-    # LEADS FOR SEARCH SUGGESTIONS
-    # =====================================================
 
+    # Suggestions
     if user.role in [
         "admin",
         "developer"
@@ -696,15 +815,13 @@ def leads():
             assigned_to=user.id
         )
 
+
     lead_suggestions = suggestion_query.order_by(
         Lead.name.asc()
     ).all()
 
-    # =====================================================
-    # LEADS VISIBLE IN TABLE
-    # =====================================================
 
-    # Admin / Developer
+    # Main query
     if user.role in [
         "admin",
         "developer"
@@ -712,20 +829,17 @@ def leads():
 
         query = Lead.query
 
-    # Agent
     else:
 
         query = Lead.query.filter_by(
             assigned_to=user.id
         )
 
-    # =====================================================
-    # SEARCH BY NAME, PHONE OR CITY
-    # =====================================================
 
     if search:
 
         search_pattern = f"%{search}%"
+
 
         query = query.filter(
             db.or_(
@@ -735,9 +849,6 @@ def leads():
             )
         )
 
-    # =====================================================
-    # FILTER BY STATUS
-    # =====================================================
 
     if status_filter:
 
@@ -745,19 +856,14 @@ def leads():
             Lead.status == status_filter
         )
 
-    # =====================================================
-    # ORDER BY ID
-    # =====================================================
 
     query = query.order_by(
         Lead.id.asc()
     )
 
+
     all_leads = query.all()
 
-    # =====================================================
-    # AGENTS FOR ASSIGNMENT DROPDOWN
-    # =====================================================
 
     if user.role in [
         "admin",
@@ -769,6 +875,7 @@ def leads():
     else:
 
         agents = []
+
 
     return render_template(
 
@@ -785,6 +892,7 @@ def leads():
         agents=agents,
 
         lead_suggestions=lead_suggestions
+
     )
 
 
@@ -801,22 +909,25 @@ def update_status(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     lead = Lead.query.get_or_404(id)
+
 
     if not can_access_lead(lead):
 
         return "Access denied", 403
 
+
     lead.status = request.form["status"]
 
     db.session.commit()
+
 
     return redirect("/leads")
 
 
 # =========================================================
 # DELETE LEAD
-# ADMIN / DEVELOPER ONLY
 # =========================================================
 
 @app.route(
@@ -827,15 +938,18 @@ def delete_lead(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     if not is_admin_or_developer():
 
         return "Access denied", 403
+
 
     lead = Lead.query.get_or_404(id)
 
     db.session.delete(lead)
 
     db.session.commit()
+
 
     return redirect("/leads")
 
@@ -853,7 +967,9 @@ def edit_lead(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -861,12 +977,14 @@ def edit_lead(id):
 
         return redirect("/login")
 
+
     lead = Lead.query.get_or_404(id)
 
-    # Agent can only edit assigned leads
+
     if not can_access_lead(lead):
 
         return "Access denied", 403
+
 
     if request.method == "POST":
 
@@ -884,7 +1002,7 @@ def edit_lead(id):
 
         lead.notes = request.form["notes"]
 
-        # Admin / developer can change assignment
+
         if user.role in [
             "admin",
             "developer"
@@ -894,16 +1012,22 @@ def edit_lead(id):
                 "assigned_to"
             )
 
+
             if assigned_to:
 
                 assigned_user = User.query.filter(
                     User.id == int(assigned_to),
-                    User.role.in_(["agent", "admin"])
+                    User.role.in_([
+                        "agent",
+                        "admin"
+                    ])
                 ).first()
+
 
                 if not assigned_user:
 
                     return "Invalid agent", 400
+
 
                 lead.assigned_to = assigned_user.id
 
@@ -911,11 +1035,13 @@ def edit_lead(id):
 
                 lead.assigned_to = None
 
+
         db.session.commit()
+
 
         return redirect("/leads")
 
-    # Agents available for admin/developer
+
     if user.role in [
         "admin",
         "developer"
@@ -927,6 +1053,7 @@ def edit_lead(id):
 
         agents = []
 
+
     return render_template(
 
         "edit_lead.html",
@@ -936,6 +1063,7 @@ def edit_lead(id):
         agents=agents,
 
         current_user=user
+
     )
 
 
@@ -949,7 +1077,9 @@ def follow_ups():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -957,7 +1087,7 @@ def follow_ups():
 
         return redirect("/login")
 
-    # Admin / Developer see all follow-ups
+
     if user.role in [
         "admin",
         "developer"
@@ -967,8 +1097,6 @@ def follow_ups():
             FollowUp.due_date.asc()
         ).all()
 
-    # Agent sees only follow-ups belonging
-    # to their assigned leads
     else:
 
         all_follow_ups = FollowUp.query.join(
@@ -979,6 +1107,7 @@ def follow_ups():
             FollowUp.due_date.asc()
         ).all()
 
+
     return render_template(
 
         "follow_ups.html",
@@ -986,6 +1115,7 @@ def follow_ups():
         follow_ups=all_follow_ups,
 
         current_user=user
+
     )
 
 
@@ -1002,7 +1132,9 @@ def add_follow_up():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -1010,7 +1142,7 @@ def add_follow_up():
 
         return redirect("/login")
 
-    # Admin / Developer can see all leads
+
     if user.role in [
         "admin",
         "developer"
@@ -1020,7 +1152,6 @@ def add_follow_up():
             Lead.name.asc()
         ).all()
 
-    # Agent only sees their leads
     else:
 
         leads = Lead.query.filter_by(
@@ -1029,20 +1160,23 @@ def add_follow_up():
             Lead.name.asc()
         ).all()
 
+
     if request.method == "POST":
 
         lead_id = int(
             request.form["lead_id"]
         )
 
+
         lead = Lead.query.get_or_404(
             lead_id
         )
 
-        # User must have access to lead
+
         if not can_access_lead(lead):
 
             return "Access denied", 403
+
 
         due_date = datetime.strptime(
 
@@ -1051,6 +1185,7 @@ def add_follow_up():
             "%Y-%m-%dT%H:%M"
 
         )
+
 
         follow_up = FollowUp(
 
@@ -1066,11 +1201,14 @@ def add_follow_up():
 
         )
 
+
         db.session.add(follow_up)
 
         db.session.commit()
 
+
         return redirect("/follow-ups")
+
 
     return render_template(
 
@@ -1079,6 +1217,7 @@ def add_follow_up():
         leads=leads,
 
         current_user=user
+
     )
 
 
@@ -1095,7 +1234,9 @@ def edit_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -1103,17 +1244,17 @@ def edit_follow_up(id):
 
         return redirect("/login")
 
+
     follow_up = FollowUp.query.get_or_404(id)
 
-    # Agent can only access follow-ups
-    # belonging to their own leads
+
     if not can_access_lead(
         follow_up.lead
     ):
 
         return "Access denied", 403
 
-    # Admin / Developer see all leads
+
     if user.role in [
         "admin",
         "developer"
@@ -1123,7 +1264,6 @@ def edit_follow_up(id):
             Lead.name.asc()
         ).all()
 
-    # Agent only sees their own leads
     else:
 
         leads = Lead.query.filter_by(
@@ -1132,23 +1272,25 @@ def edit_follow_up(id):
             Lead.name.asc()
         ).all()
 
+
     if request.method == "POST":
 
         lead_id = int(
             request.form["lead_id"]
         )
 
+
         selected_lead = Lead.query.get_or_404(
             lead_id
         )
 
-        # Cannot move follow-up
-        # to an inaccessible lead
+
         if not can_access_lead(
             selected_lead
         ):
 
             return "Access denied", 403
+
 
         due_date = datetime.strptime(
 
@@ -1157,6 +1299,7 @@ def edit_follow_up(id):
             "%Y-%m-%dT%H:%M"
 
         )
+
 
         follow_up.lead_id = lead_id
 
@@ -1168,9 +1311,12 @@ def edit_follow_up(id):
 
         follow_up.notes = request.form["notes"]
 
+
         db.session.commit()
 
+
         return redirect("/follow-ups")
+
 
     return render_template(
 
@@ -1181,6 +1327,7 @@ def edit_follow_up(id):
         leads=leads,
 
         current_user=user
+
     )
 
 
@@ -1197,9 +1344,11 @@ def complete_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     follow_up = FollowUp.query.get_or_404(
         id
     )
+
 
     if not can_access_lead(
         follow_up.lead
@@ -1207,9 +1356,11 @@ def complete_follow_up(id):
 
         return "Access denied", 403
 
+
     follow_up.completed = True
 
     db.session.commit()
+
 
     return redirect("/follow-ups")
 
@@ -1227,9 +1378,11 @@ def reopen_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     follow_up = FollowUp.query.get_or_404(
         id
     )
+
 
     if not can_access_lead(
         follow_up.lead
@@ -1237,16 +1390,17 @@ def reopen_follow_up(id):
 
         return "Access denied", 403
 
+
     follow_up.completed = False
 
     db.session.commit()
+
 
     return redirect("/follow-ups")
 
 
 # =========================================================
 # DELETE FOLLOW-UP
-# ADMIN / DEVELOPER ONLY
 # =========================================================
 
 @app.route(
@@ -1257,17 +1411,21 @@ def delete_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     if not is_admin_or_developer():
 
         return "Access denied", 403
+
 
     follow_up = FollowUp.query.get_or_404(
         id
     )
 
+
     db.session.delete(follow_up)
 
     db.session.commit()
+
 
     return redirect("/follow-ups")
 
@@ -1282,7 +1440,9 @@ def discovery():
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     user = current_user()
+
 
     if not user:
 
@@ -1290,20 +1450,36 @@ def discovery():
 
         return redirect("/login")
 
+
+    # Agents cannot access Discovery
     if user.role == "agent":
 
         return redirect("/")
+
 
     opportunities = DiscoveryLead.query.order_by(
         DiscoveryLead.score.desc()
     ).all()
 
+
     return render_template(
+
         "discovery.html",
+
         opportunities=opportunities,
-        current_user=user
+
+        current_user=user,
+
+        scan_running=craigslist_scan_status["running"],
+
+        last_scan_count=craigslist_scan_status["added"]
+
     )
 
+
+# =========================================================
+# CRAIGSLIST BACKGROUND SCAN
+# =========================================================
 
 def run_craigslist_background():
 
@@ -1311,29 +1487,130 @@ def run_craigslist_background():
 
         with app.app_context():
 
+            # -------------------------------------------------
+            # Check if ad was already processed
+            # -------------------------------------------------
+
             def already_processed(url):
 
                 return DiscoveryLead.query.filter_by(
                     url=url
                 ).first() is not None
 
+
+            # -------------------------------------------------
+            # START STATUS
+            # -------------------------------------------------
+
+            craigslist_scan_status["running"] = True
+
+            craigslist_scan_status["processed"] = 0
+
+            craigslist_scan_status["added"] = 0
+
+            craigslist_scan_status["finished"] = False
+
+            craigslist_scan_status["error"] = None
+
+
+            # -------------------------------------------------
+            # SCAN CRAIGSLIST
+            # -------------------------------------------------
+
             ads = discovery_engine.scan(
+
                 already_processed=already_processed
+
             )
 
-            discovery_engine.process_ads(
-                ads,
-                create_discovery_lead
+
+            craigslist_scan_status["processed"] = len(
+                ads
             )
+
+
+            # -------------------------------------------------
+            # SAVE ADS
+            # -------------------------------------------------
+
+            saved_ads = discovery_engine.process_ads(
+
+                ads,
+
+                create_discovery_lead
+
+            )
+
+
+            craigslist_scan_status["added"] = len(
+                saved_ads
+            )
+
+
+            # -------------------------------------------------
+            # FINISHED
+            # -------------------------------------------------
+
+            craigslist_scan_status["finished"] = True
+
+            craigslist_scan_status["running"] = False
+
+
+            print(
+                "Craigslist scan completed:",
+                len(saved_ads),
+                "new ads added."
+            )
+
 
     except Exception as e:
 
-        print("Craigslist scan failed:", e)
+        print(
+            "Craigslist scan failed:",
+            repr(e)
+        )
+
+
+        craigslist_scan_status["error"] = str(e)
+
+        craigslist_scan_status["running"] = False
+
+        craigslist_scan_status["finished"] = True
+
+
+# =========================================================
+# CRAIGSLIST SCAN STATUS
+# =========================================================
+
+@app.route(
+    "/discovery/craigslist-status"
+)
+def craigslist_status():
+
+    if not session.get("logged_in"):
+
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
+
+
+    user = current_user()
+
+
+    if not user or user.role == "agent":
+
+        return jsonify({
+            "error": "Access denied"
+        }), 403
+
+
+    return jsonify(
+        craigslist_scan_status
+    )
 
 
 # =========================================================
 # DELETE DISCOVERY LEAD
-# ADMIN / DEVELOPER ONLY
 # =========================================================
 
 @app.route(
@@ -1345,21 +1622,29 @@ def delete_discovery(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+
     if not is_admin_or_developer():
 
         return "Access denied", 403
 
-    discovery_lead = DiscoveryLead.query.get_or_404(id)
 
-    db.session.delete(discovery_lead)
+    discovery_lead = DiscoveryLead.query.get_or_404(
+        id
+    )
+
+
+    db.session.delete(
+        discovery_lead
+    )
 
     db.session.commit()
+
 
     return redirect("/discovery")
 
 
 # =========================================================
-# DISCOVERY - RUN CRAIGSLIST SCAN
+# RUN CRAIGSLIST SCAN
 # =========================================================
 
 @app.route(
@@ -1369,22 +1654,61 @@ def delete_discovery(id):
 def run_craigslist_scan():
 
     if not session.get("logged_in"):
+
         return redirect("/login")
+
 
     user = current_user()
 
+
     if not user or user.role == "agent":
+
         return "Access denied", 403
 
-    thread = threading.Thread(
-        target=run_craigslist_background
-    )
 
-    thread.daemon = True
+    # -----------------------------------------------------
+    # Prevent duplicate scans
+    # -----------------------------------------------------
 
-    thread.start()
+    with craigslist_scan_lock:
+
+        if craigslist_scan_status["running"]:
+
+            return redirect("/discovery")
+
+
+        # -------------------------------------------------
+        # Reset status
+        # -------------------------------------------------
+
+        craigslist_scan_status["running"] = True
+
+        craigslist_scan_status["processed"] = 0
+
+        craigslist_scan_status["added"] = 0
+
+        craigslist_scan_status["finished"] = False
+
+        craigslist_scan_status["error"] = None
+
+
+        # -------------------------------------------------
+        # Start background thread
+        # -------------------------------------------------
+
+        thread = threading.Thread(
+
+            target=run_craigslist_background
+
+        )
+
+        thread.daemon = True
+
+        thread.start()
+
 
     return redirect("/discovery")
+
 
 # =========================================================
 # DATABASE SETUP + MIGRATIONS
@@ -1392,12 +1716,17 @@ def run_craigslist_scan():
 
 with app.app_context():
 
-    # Create tables that don't exist
+    # -----------------------------------------------------
+    # Create missing tables
+    # -----------------------------------------------------
+
     db.create_all()
+
 
     inspector = inspect(
         db.engine
     )
+
 
     # =====================================================
     # LEAD TABLE MIGRATION
@@ -1413,7 +1742,8 @@ with app.app_context():
 
     ]
 
-    # Add created_at if it doesn't exist
+
+    # Add created_at if missing
     if "created_at" not in lead_columns:
 
         with db.engine.connect() as connection:
@@ -1421,13 +1751,14 @@ with app.app_context():
             connection.execute(
                 text(
                     "ALTER TABLE lead "
-                    "ADD COLUMN created_at DATETIME"
+                    "ADD COLUMN created_at TIMESTAMP"
                 )
             )
 
             connection.commit()
 
-    # Add assigned_to if it doesn't exist
+
+    # Add assigned_to if missing
     if "assigned_to" not in lead_columns:
 
         with db.engine.connect() as connection:
@@ -1456,7 +1787,8 @@ with app.app_context():
 
     ]
 
-    # Add phone if it doesn't exist
+
+    # Add phone if missing
     if "phone" not in discovery_lead_columns:
 
         with db.engine.connect() as connection:
@@ -1468,36 +1800,35 @@ with app.app_context():
                 )
             )
 
-            connection.commit()        
+            connection.commit()
+
 
     # =====================================================
     # CREATE DEFAULT USERS
     # =====================================================
-    # Passwords come from environment variables, never from
-    # source code. If a variable isn't set, that user is
-    # skipped (with a warning) instead of falling back to a
-    # guessable default. If a user account doesn't exist yet
-    # and no password was provided for it, a random one-time
-    # password is generated and printed once so the app can
-    # still start — log in with it and change it right away.
 
     users_to_create = [
+
         {
             "username": "jeremy",
             "env_var": "ADMIN_PASSWORD",
             "role": "admin"
         },
+
         {
             "username": "daniel",
             "env_var": "DEVELOPER_PASSWORD",
             "role": "developer"
         },
+
         {
             "username": "agent",
             "env_var": "AGENT_PASSWORD",
             "role": "agent"
         }
+
     ]
+
 
     for user_data in users_to_create:
 
@@ -1505,29 +1836,54 @@ with app.app_context():
             username=user_data["username"]
         ).first()
 
+
         if existing_user:
 
             continue
 
-        password = os.environ.get(user_data["env_var"])
 
-        if not password:
-            password = secrets.token_urlsafe(12)
-            print(
-                f"[setup] {user_data['env_var']} not set — "
-                f"generated a one-time password for "
-                f"'{user_data['username']}': {password}\n"
-                f"[setup] Log in and change it, or set "
-                f"{user_data['env_var']} and recreate the user."
-            )
-
-        new_user = User(
-            username=user_data["username"],
-            password_hash=generate_password_hash(password),
-            role=user_data["role"]
+        password = os.environ.get(
+            user_data["env_var"]
         )
 
-        db.session.add(new_user)
+
+        if not password:
+
+            password = secrets.token_urlsafe(12)
+
+
+            print(
+
+                f"[setup] {user_data['env_var']} not set — "
+
+                f"generated a one-time password for "
+
+                f"'{user_data['username']}': {password}\n"
+
+                f"[setup] Log in and change it, or set "
+
+                f"{user_data['env_var']} and recreate the user."
+
+            )
+
+
+        new_user = User(
+
+            username=user_data["username"],
+
+            password_hash=generate_password_hash(
+                password
+            ),
+
+            role=user_data["role"]
+
+        )
+
+
+        db.session.add(
+            new_user
+        )
+
 
     db.session.commit()
 
