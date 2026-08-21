@@ -22,12 +22,205 @@ Lead Discovery
 </div>
 
 
+<!-- =========================================================
+     DISCOVERY STATS
+     ========================================================= -->
+
+<div class="row g-3 mb-4">
+
+    <!-- TOTAL OPPORTUNITIES -->
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+
+                        <p class="text-muted mb-1">
+                            Total Opportunities
+                        </p>
+
+                        <h2 class="mb-0">
+                            {{ opportunities|length }}
+                        </h2>
+
+                    </div>
+
+                    <div>
+                        <i class="bi bi-database-fill fs-1 text-primary"></i>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- LAST SCAN -->
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+
+                        <p class="text-muted mb-1">
+                            Last Craigslist Scan
+                        </p>
+
+                        {% if scan_running %}
+
+                            <h4 class="mb-0 text-warning">
+
+                                <span
+                                    class="spinner-border spinner-border-sm me-2"
+                                    role="status"
+                                ></span>
+
+                                Scanning...
+
+                            </h4>
+
+                        {% elif last_scan_count is not none %}
+
+                            <h2 class="mb-0 text-success">
+                                +{{ last_scan_count }}
+                            </h2>
+
+                            <small class="text-muted">
+                                new opportunities added
+                            </small>
+
+                        {% else %}
+
+                            <h4 class="mb-0 text-muted">
+                                No scans yet
+                            </h4>
+
+                        {% endif %}
+
+                    </div>
+
+                    <div>
+
+                        {% if scan_running %}
+
+                            <i class="bi bi-hourglass-split fs-1 text-warning"></i>
+
+                        {% elif last_scan_count is not none %}
+
+                            <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+
+                        {% else %}
+
+                            <i class="bi bi-search fs-1 text-muted"></i>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- SCAN STATUS -->
+
+    <div class="col-md-4">
+
+        <div class="card shadow-sm h-100">
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+
+                        <p class="text-muted mb-1">
+                            Craigslist Status
+                        </p>
+
+                        {% if scan_running %}
+
+                            <h4 class="mb-0 text-warning">
+                                Running
+                            </h4>
+
+                            <small class="text-muted">
+                                Please wait until the scan finishes.
+                            </small>
+
+                        {% else %}
+
+                            <h4 class="mb-0 text-success">
+                                Ready
+                            </h4>
+
+                            <small class="text-muted">
+                                Ready for a new scan.
+                            </small>
+
+                        {% endif %}
+
+                    </div>
+
+                    <div>
+
+                        {% if scan_running %}
+
+                            <i class="bi bi-arrow-repeat fs-1 text-warning"></i>
+
+                        {% else %}
+
+                            <i class="bi bi-check-circle fs-1 text-success"></i>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     ACTIONS
+     ========================================================= -->
+
 <div class="d-flex gap-2 mb-4">
 
-    <a href="/" class="btn btn-secondary">
+    <a
+        href="/"
+        class="btn btn-secondary"
+    >
+
         <i class="bi bi-house-fill"></i>
+
         Dashboard
+
     </a>
+
 
     <form
         action="/discovery/run-craigslist"
@@ -37,15 +230,36 @@ Lead Discovery
         <button
             type="submit"
             class="btn btn-dark"
+            {% if scan_running %}disabled{% endif %}
         >
-            <i class="bi bi-search"></i>
-            Run Craigslist Scan
+
+            {% if scan_running %}
+
+                <span
+                    class="spinner-border spinner-border-sm me-1"
+                    role="status"
+                ></span>
+
+                Scanning Craigslist...
+
+            {% else %}
+
+                <i class="bi bi-search"></i>
+
+                Run Craigslist Scan
+
+            {% endif %}
+
         </button>
 
     </form>
 
 </div>
 
+
+<!-- =========================================================
+     RESULTS
+     ========================================================= -->
 
 <div class="card shadow">
 
@@ -60,14 +274,39 @@ Lead Discovery
                 <thead>
 
                     <tr>
-                        <th>Title</th>
-                        <th>Description</th>
-                        <th>City</th>
-                        <th>Source</th>
-                        <th>Contact</th>
-                        <th>Score</th>
-                        <th>Date</th>
-                        <th>Action</th>
+
+                        <th>
+                            Title
+                        </th>
+
+                        <th>
+                            Description
+                        </th>
+
+                        <th>
+                            City
+                        </th>
+
+                        <th>
+                            Source
+                        </th>
+
+                        <th>
+                            Contact
+                        </th>
+
+                        <th>
+                            Score
+                        </th>
+
+                        <th>
+                            Date
+                        </th>
+
+                        <th>
+                            Action
+                        </th>
+
                     </tr>
 
                 </thead>
@@ -78,10 +317,14 @@ Lead Discovery
 
                     <tr>
 
+                        <!-- TITLE -->
+
                         <td>
+
                             <strong>
                                 {{ item.title }}
                             </strong>
+
                         </td>
 
 
@@ -99,20 +342,28 @@ Lead Discovery
                                 aria-expanded="false"
                                 aria-controls="description-{{ item.id }}"
                             >
+
                                 <i class="bi bi-eye"></i>
+
                                 View
+
                             </button>
+
 
                             <div
                                 class="collapse mt-2"
                                 id="description-{{ item.id }}"
                             >
+
                                 <div
                                     class="p-3 bg-light rounded text-muted"
                                     style="min-width: 300px; max-width: 500px;"
                                 >
+
                                     {{ item.description }}
+
                                 </div>
+
                             </div>
 
                             {% else %}
@@ -147,15 +398,21 @@ Lead Discovery
                             {% if item.phone %}
 
                                 <span class="badge bg-success fs-6">
+
                                     <i class="bi bi-telephone-fill"></i>
+
                                     {{ item.phone }}
+
                                 </span>
 
                             {% else %}
 
                                 <span class="badge bg-secondary">
+
                                     <i class="bi bi-telephone-x"></i>
+
                                     No phone
+
                                 </span>
 
                             {% endif %}
@@ -193,7 +450,9 @@ Lead Discovery
                         <!-- DATE -->
 
                         <td>
+
                             {{ item.found_at.strftime("%d/%m/%Y") }}
+
                         </td>
 
 
@@ -201,41 +460,48 @@ Lead Discovery
 
                         <td>
 
-    <div class="d-flex gap-2">
+                            <div class="d-flex gap-2">
 
-        {% if item.url %}
+                                {% if item.url %}
 
-        <a
-            href="{{ item.url }}"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn btn-sm btn-primary"
-        >
-            <i class="bi bi-box-arrow-up-right"></i>
-            Open
-        </a>
+                                <a
+                                    href="{{ item.url }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="btn btn-sm btn-primary"
+                                >
 
-        {% endif %}
+                                    <i class="bi bi-box-arrow-up-right"></i>
 
-        <form
-            action="/delete-discovery/{{ item.id }}"
-            method="POST"
-            onsubmit="return confirm('Are you sure you want to delete this opportunity?');"
-        >
+                                    Open
 
-            <button
-                type="submit"
-                class="btn btn-sm btn-danger"
-            >
-                <i class="bi bi-trash"></i>
-                Delete
-            </button>
+                                </a>
 
-        </form>
+                                {% endif %}
 
-    </div>
 
-</td>
+                                <form
+                                    action="/delete-discovery/{{ item.id }}"
+                                    method="POST"
+                                    onsubmit="return confirm('Are you sure you want to delete this opportunity?');"
+                                >
+
+                                    <button
+                                        type="submit"
+                                        class="btn btn-sm btn-danger"
+                                    >
+
+                                        <i class="bi bi-trash"></i>
+
+                                        Delete
+
+                                    </button>
+
+                                </form>
+
+                            </div>
+
+                        </td>
 
                     </tr>
 
@@ -268,6 +534,25 @@ Lead Discovery
     </div>
 
 </div>
+
+
+<!-- =========================================================
+     AUTO REFRESH WHILE SCAN IS RUNNING
+     ========================================================= -->
+
+{% if scan_running %}
+
+<script>
+
+    setTimeout(function() {
+
+        window.location.reload();
+
+    }, 5000);
+
+</script>
+
+{% endif %}
 
 
 {% endblock %}
