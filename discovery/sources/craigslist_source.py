@@ -1,12 +1,9 @@
 import time
 import re
-
 from urllib.parse import urljoin
 
 import requests
-
 from bs4 import BeautifulSoup
-
 from playwright.sync_api import sync_playwright
 
 
@@ -30,13 +27,14 @@ HEADERS = {
 # CONFIGURATION
 # =========================================================
 
-# Número de anuncios NUEVOS que procesamos en cada ejecución
+# Número máximo de anuncios NUEVOS que procesamos
+# en cada ejecución.
 MAX_ADS = 30
 
-# Archivo donde guardamos la posición del último lote
+# Archivo donde guardamos la posición del último lote.
 OFFSET_FILE = "craigslist_offset.txt"
 
-# Segundos de espera entre anuncios
+# Segundos de espera entre anuncios.
 DELAY_BETWEEN_REQUESTS = 1.5
 
 
@@ -45,21 +43,22 @@ DELAY_BETWEEN_REQUESTS = 1.5
 # =========================================================
 
 def get_ad_detail(page, url):
-
     """
     Abre un anuncio de Craigslist con Playwright.
 
     Extrae:
-
     - descripción
     - fecha de publicación
     - teléfono
 
     Si existe "show contact info", lo pulsa.
+
+    IMPORTANTE:
+    La page se reutiliza entre anuncios para evitar
+    crear múltiples páginas de Chromium.
     """
 
     try:
-
         print(f"\nOpening: {url}")
 
         # =====================================================
@@ -72,8 +71,6 @@ def get_ad_detail(page, url):
             timeout=20000
         )
 
-        page.wait_for_timeout(2000)
-
         # =====================================================
         # POSTED DATE
         # =====================================================
@@ -83,7 +80,6 @@ def get_ad_detail(page, url):
         time_tag = page.locator("time").first
 
         if time_tag.count() > 0:
-
             posted_at = time_tag.get_attribute(
                 "datetime"
             )
@@ -97,13 +93,11 @@ def get_ad_detail(page, url):
         description = ""
 
         if body.count() > 0:
-
             description = body.inner_text().strip()
 
             prefix = "QR Code Link to This Post"
 
             if description.startswith(prefix):
-
                 description = (
                     description[len(prefix):]
                     .strip()
@@ -157,14 +151,12 @@ def get_ad_detail(page, url):
                 # =================================================
 
                 try:
-
                     page.wait_for_load_state(
                         "domcontentloaded",
                         timeout=10000
                     )
 
                 except Exception:
-
                     pass
 
                 # =================================================
@@ -201,7 +193,6 @@ def get_ad_detail(page, url):
         updated_description = ""
 
         if body.count() > 0:
-
             updated_description = (
                 body.inner_text().strip()
             )
@@ -292,16 +283,12 @@ def get_ad_detail(page, url):
         # =====================================================
 
         return {
-
             "description": (
                 updated_description
                 or description
             ),
-
             "posted_at": posted_at,
-
             "phone": phone
-
         }
 
     except Exception as e:
@@ -313,13 +300,9 @@ def get_ad_detail(page, url):
         )
 
         return {
-
             "description": "",
-
             "posted_at": None,
-
             "phone": None
-
         }
 
 
@@ -328,7 +311,6 @@ def get_ad_detail(page, url):
 # =========================================================
 
 def get_offset():
-
     """
     Obtiene el offset actual.
     """
@@ -354,7 +336,6 @@ def get_offset():
 
 
 def save_offset(offset):
-
     """
     Guarda el offset para el siguiente scan.
     """
@@ -375,30 +356,12 @@ def save_offset(offset):
 # =========================================================
 
 def scan(already_processed=None):
-
     """
     Busca MAX_ADS anuncios NUEVOS empezando desde
     el offset actual.
 
     Los anuncios que ya existen en la base de datos
     se saltan automáticamente.
-
-    Ejecución 1:
-
-        offset 0
-        → busca anuncios nuevos
-
-    Ejecución 2:
-
-        offset 10
-        → busca anuncios nuevos
-
-    Ejecución 3:
-
-        offset 20
-        → busca anuncios nuevos
-
-    etc.
     """
 
     # =====================================================
@@ -475,15 +438,65 @@ def scan(already_processed=None):
 
     with sync_playwright() as p:
 
-        browser = p.chromium.launch(
-            headless=True
-        )
-
-        page = browser.new_page(
-            user_agent=HEADERS["User-Agent"]
-        )
+        browser = None
+        context = None
+        page = None
 
         try:
+
+            # =================================================
+            # LAUNCH LIGHTER CHROMIUM
+            # =================================================
+
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--no-sandbox"
+                ]
+            )
+
+            # =================================================
+            # CREATE EXPLICIT CONTEXT
+            # =================================================
+
+            context = browser.new_context(
+                user_agent=HEADERS["User-Agent"]
+            )
+
+            # =================================================
+            # CREATE SINGLE REUSABLE PAGE
+            # =================================================
+
+            page = context.new_page()
+
+            # =================================================
+            # BLOCK UNNECESSARY RESOURCES
+            # =================================================
+
+            def handle_route(route):
+
+                resource_type = (
+                    route.request.resource_type
+                )
+
+                if resource_type in {
+                    "image",
+                    "font",
+                    "media"
+                }:
+
+                    route.abort()
+
+                else:
+
+                    route.continue_()
+
+            page.route(
+                "**/*",
+                handle_route
+            )
 
             # =================================================
             # PROCESS LISTINGS
@@ -496,7 +509,6 @@ def scan(already_processed=None):
                 # =============================================
 
                 if len(ads) >= MAX_ADS:
-
                     break
 
                 # =============================================
@@ -509,7 +521,6 @@ def scan(already_processed=None):
                 )
 
                 if link_tag is None:
-
                     continue
 
                 ad_url = urljoin(
@@ -528,7 +539,7 @@ def scan(already_processed=None):
                         if already_processed(ad_url):
 
                             print(
-                                f"Already processed, skipping: "
+                                "Already processed, skipping: "
                                 f"{ad_url}"
                             )
 
@@ -542,8 +553,9 @@ def scan(already_processed=None):
                             repr(e)
                         )
 
-                        # If the database check fails,
+                        # If database check fails,
                         # skip this ad for safety.
+
                         continue
 
                 # =============================================
@@ -556,15 +568,11 @@ def scan(already_processed=None):
                 )
 
                 title = (
-
                     title_div.get_text(
                         strip=True
                     )
-
                     if title_div
-
                     else ""
-
                 )
 
                 # =============================================
@@ -577,15 +585,11 @@ def scan(already_processed=None):
                 )
 
                 city = (
-
                     location_div.get_text(
                         strip=True
                     )
-
                     if location_div
-
                     else "San Diego"
-
                 )
 
                 # =============================================
@@ -602,7 +606,6 @@ def scan(already_processed=None):
                 # =============================================
 
                 ad = {
-
                     "title": title,
 
                     "description": (
@@ -623,7 +626,6 @@ def scan(already_processed=None):
                     "phone": (
                         detail["phone"]
                     )
-
                 }
 
                 ads.append(
@@ -652,7 +654,33 @@ def scan(already_processed=None):
 
         finally:
 
-            browser.close()
+            # =================================================
+            # EXPLICIT RESOURCE CLEANUP
+            # =================================================
+
+            if page is not None:
+
+                try:
+                    page.close()
+
+                except Exception:
+                    pass
+
+            if context is not None:
+
+                try:
+                    context.close()
+
+                except Exception:
+                    pass
+
+            if browser is not None:
+
+                try:
+                    browser.close()
+
+                except Exception:
+                    pass
 
     # =====================================================
     # SAVE NEXT OFFSET
