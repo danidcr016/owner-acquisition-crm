@@ -37,6 +37,370 @@ OFFSET_FILE = "craigslist_offset.txt"
 # Segundos de espera entre anuncios.
 DELAY_BETWEEN_REQUESTS = 1.5
 
+# Máximo de páginas externas que consultamos por anuncio.
+# Lo dejamos en 1 para proteger RAM/tiempo de Render.
+MAX_EXTERNAL_PAGES_PER_AD = 1
+
+# Timeout para páginas externas.
+EXTERNAL_REQUEST_TIMEOUT = 8
+
+
+# =========================================================
+# PHONE EXTRACTION
+# =========================================================
+
+def extract_phone_from_text(text):
+    """
+    Busca teléfonos estadounidenses dentro de un texto.
+
+    Ejemplos detectados:
+
+    619-555-1234
+    (619) 555-1234
+    619.555.1234
+    619 555 1234
+    +1 619-555-1234
+    1-619-555-1234
+    """
+
+    if not text:
+        return None
+
+    phone_pattern = re.compile(
+        r"""
+        (?<!\d)
+        (?:\+?1[\s.\-]?)?
+        \(?\d{3}\)?
+        [\s.\-]?
+        \d{3}
+        [\s.\-]?
+        \d{4}
+        (?!\d)
+        """,
+        re.VERBOSE
+    )
+
+    matches = phone_pattern.findall(text)
+
+    if matches:
+        return matches[0].strip()
+
+    return None
+
+
+def extract_phone_from_html(html):
+    """
+    Busca teléfono primero en enlaces tel:
+    y después dentro del texto HTML.
+    """
+
+    if not html:
+        return None
+
+    soup = BeautifulSoup(
+        html,
+        "html.parser"
+    )
+
+    # =====================================================
+    # FIRST: TEL LINKS
+    # =====================================================
+
+    tel_link = soup.select_one(
+        'a[href^="tel:"]'
+    )
+
+    if tel_link:
+
+        href = tel_link.get(
+            "href",
+            ""
+        )
+
+        phone = (
+            href
+            .replace("tel:", "")
+            .strip()
+        )
+
+        if phone:
+            return phone
+
+    # =====================================================
+    # SECOND: PAGE TEXT
+    # =====================================================
+
+    text = soup.get_text(
+        " ",
+        strip=True
+    )
+
+    return extract_phone_from_text(
+        text
+    )
+
+
+# =========================================================
+# EXTERNAL URL DETECTION
+# =========================================================
+
+def is_relevant_external_url(url):
+    """
+    Decide si un enlace externo parece relevante para
+    encontrar información de contacto de un propietario
+    o property manager.
+
+    NO abrimos enlaces externos indiscriminadamente.
+
+    Priorizamos:
+    - TurboTenant
+    - páginas de alquiler
+    - property management
+    - landlord/contact/application pages
+    """
+
+    if not url:
+        return False
+
+    url_lower = url.lower()
+
+    # =====================================================
+    # IGNORE NON-HTTP LINKS
+    # =====================================================
+
+    if not (
+        url_lower.startswith("http://")
+        or url_lower.startswith("https://")
+    ):
+        return False
+
+    # =====================================================
+    # IGNORE SOCIAL / GENERIC LINKS
+    # =====================================================
+
+    ignored_domains = {
+        "facebook.com",
+        "www.facebook.com",
+        "instagram.com",
+        "www.instagram.com",
+        "twitter.com",
+        "www.twitter.com",
+        "x.com",
+        "www.x.com",
+        "youtube.com",
+        "www.youtube.com",
+        "linkedin.com",
+        "www.linkedin.com",
+    }
+
+    for domain in ignored_domains:
+
+        if domain in url_lower:
+            return False
+
+    # =====================================================
+    # HIGH-VALUE RENTAL PLATFORMS
+    # =====================================================
+
+    priority_domains = {
+        "turbotenant.com",
+        "rental.turbotenant.com",
+        "renter.turbotenant.com",
+    }
+
+    for domain in priority_domains:
+
+        if domain in url_lower:
+            return True
+
+    # =====================================================
+    # RELEVANT URL KEYWORDS
+    # =====================================================
+
+    relevant_keywords = (
+        "contact",
+        "landlord",
+        "property",
+        "rental",
+        "rent",
+        "leasing",
+        "lease",
+        "management",
+        "manager",
+        "application",
+        "apply",
+        "housing",
+        "apartments",
+    )
+
+    return any(
+        keyword in url_lower
+        for keyword in relevant_keywords
+    )
+
+
+# =========================================================
+# EXTERNAL PHONE EXTRACTION
+# =========================================================
+
+def extract_phone_from_external_page(url):
+    """
+    Consulta UNA página externa utilizando requests.
+
+    No utiliza Playwright para evitar crear más Chromium
+    resources.
+
+    Devuelve:
+        phone, source
+    """
+
+    if not url:
+        return None, None
+
+    print(
+        f"Checking external contact page: {url}"
+    )
+
+    try:
+
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=EXTERNAL_REQUEST_TIMEOUT,
+            allow_redirects=True
+        )
+
+        print(
+            f"External page status: "
+            f"{response.status_code}"
+        )
+
+        if response.status_code != 200:
+
+            print(
+                "External page unavailable."
+            )
+
+            return None, None
+
+        # =================================================
+        # PHONE EXTRACTION
+        # =================================================
+
+        phone = extract_phone_from_html(
+            response.text
+        )
+
+        if phone:
+
+            print(
+                "PHONE FOUND ON EXTERNAL PAGE:",
+                phone
+            )
+
+            return phone, "external"
+
+        print(
+            "No phone found on external page."
+        )
+
+        return None, None
+
+    except requests.RequestException as e:
+
+        print(
+            "External page request error:",
+            repr(e)
+        )
+
+        return None, None
+
+    except Exception as e:
+
+        print(
+            "External page processing error:",
+            repr(e)
+        )
+
+        return None, None
+
+
+# =========================================================
+# FIND EXTERNAL CONTACT URLS
+# =========================================================
+
+def find_external_contact_urls(page, ad_url):
+    """
+    Obtiene los enlaces existentes dentro de la descripción
+    de Craigslist y selecciona únicamente aquellos que
+    parecen relevantes para contacto/rental/property management.
+
+    No abre los enlaces aquí.
+    """
+
+    urls = []
+
+    try:
+
+        links = page.locator(
+            "#postingbody a[href]"
+        )
+
+        count = links.count()
+
+        print(
+            f"External links found in description: {count}"
+        )
+
+        for i in range(count):
+
+            try:
+
+                href = links.nth(i).get_attribute(
+                    "href"
+                )
+
+                if not href:
+                    continue
+
+                absolute_url = urljoin(
+                    ad_url,
+                    href
+                )
+
+                if is_relevant_external_url(
+                    absolute_url
+                ):
+
+                    if absolute_url not in urls:
+
+                        urls.append(
+                            absolute_url
+                        )
+
+            except Exception:
+
+                continue
+
+    except Exception as e:
+
+        print(
+            "Error finding external URLs:",
+            repr(e)
+        )
+
+    print(
+        f"Relevant external URLs selected: {len(urls)}"
+    )
+
+    for url in urls:
+
+        print(
+            f"  External candidate: {url}"
+        )
+
+    return urls
+
 
 # =========================================================
 # GET AD DETAIL
@@ -51,15 +415,21 @@ def get_ad_detail(page, url):
     - fecha de publicación
     - teléfono
 
-    Si existe "show contact info", lo pulsa.
+    Busca teléfono mediante:
 
-    IMPORTANTE:
-    La page se reutiliza entre anuncios para evitar
-    crear múltiples páginas de Chromium.
+    1. tel: link
+    2. descripción
+    3. show contact info
+    4. páginas externas relevantes
+
+    La page de Playwright se reutiliza entre anuncios.
     """
 
     try:
-        print(f"\nOpening: {url}")
+
+        print(
+            f"\nOpening: {url}"
+        )
 
         # =====================================================
         # OPEN AD
@@ -77,9 +447,12 @@ def get_ad_detail(page, url):
 
         posted_at = None
 
-        time_tag = page.locator("time").first
+        time_tag = page.locator(
+            "time"
+        ).first
 
         if time_tag.count() > 0:
+
             posted_at = time_tag.get_attribute(
                 "datetime"
             )
@@ -88,18 +461,31 @@ def get_ad_detail(page, url):
         # INITIAL DESCRIPTION
         # =====================================================
 
-        body = page.locator("#postingbody")
+        body = page.locator(
+            "#postingbody"
+        )
 
         description = ""
 
         if body.count() > 0:
-            description = body.inner_text().strip()
 
-            prefix = "QR Code Link to This Post"
+            description = (
+                body.inner_text()
+                .strip()
+            )
 
-            if description.startswith(prefix):
+            prefix = (
+                "QR Code Link to This Post"
+            )
+
+            if description.startswith(
+                prefix
+            ):
+
                 description = (
-                    description[len(prefix):]
+                    description[
+                        len(prefix):
+                    ]
                     .strip()
                 )
 
@@ -116,10 +502,13 @@ def get_ad_detail(page, url):
             exact=True
         ).first
 
-        contact_count = contact_element.count()
+        contact_count = (
+            contact_element.count()
+        )
 
         print(
-            f"Contact info elements found: {contact_count}"
+            f"Contact info elements found: "
+            f"{contact_count}"
         )
 
         # =====================================================
@@ -151,19 +540,23 @@ def get_ad_detail(page, url):
                 # =================================================
 
                 try:
+
                     page.wait_for_load_state(
                         "domcontentloaded",
                         timeout=10000
                     )
 
                 except Exception:
+
                     pass
 
                 # =================================================
                 # WAIT FOR CONTACT TO APPEAR
                 # =================================================
 
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(
+                    3000
+                )
 
                 print(
                     "Finished waiting after contact click"
@@ -193,8 +586,16 @@ def get_ad_detail(page, url):
         updated_description = ""
 
         if body.count() > 0:
+
             updated_description = (
-                body.inner_text().strip()
+                body.inner_text()
+                .strip()
+            )
+
+        if not updated_description:
+
+            updated_description = (
+                description
             )
 
         print(
@@ -210,6 +611,7 @@ def get_ad_detail(page, url):
         # =====================================================
 
         phone = None
+        phone_source = None
 
         # =====================================================
         # FIRST: TEL LINK
@@ -236,6 +638,8 @@ def get_ad_detail(page, url):
                     .strip()
                 )
 
+                phone_source = "craigslist_tel"
+
                 print(
                     "PHONE FOUND FROM TEL LINK:",
                     phone
@@ -247,24 +651,14 @@ def get_ad_detail(page, url):
 
         if not phone:
 
-            phone_matches = re.findall(
-                r"""
-                (?<!\d)
-                (?:\+?1[\s.\-]?)?
-                \(?\d{3}\)?[\s.\-]?
-                \d{3}[\s.\-]?
-                \d{4}
-                (?!\d)
-                """,
-                updated_description,
-                re.VERBOSE
+            phone = extract_phone_from_text(
+                updated_description
             )
 
-            if phone_matches:
+            if phone:
 
-                phone = (
-                    phone_matches[0]
-                    .strip()
+                phone_source = (
+                    "craigslist_description"
                 )
 
                 print(
@@ -279,6 +673,74 @@ def get_ad_detail(page, url):
                 )
 
         # =====================================================
+        # THIRD: EXTERNAL LINKS
+        # =====================================================
+
+        if not phone:
+
+            print(
+                "No Craigslist phone found."
+            )
+
+            external_urls = (
+                find_external_contact_urls(
+                    page,
+                    url
+                )
+            )
+
+            checked_external_pages = 0
+
+            for external_url in external_urls:
+
+                if (
+                    checked_external_pages
+                    >= MAX_EXTERNAL_PAGES_PER_AD
+                ):
+                    break
+
+                checked_external_pages += 1
+
+                external_phone, source = (
+                    extract_phone_from_external_page(
+                        external_url
+                    )
+                )
+
+                if external_phone:
+
+                    phone = external_phone
+
+                    phone_source = source
+
+                    print(
+                        "PHONE FOUND VIA EXTERNAL PAGE:",
+                        phone
+                    )
+
+                    break
+
+        # =====================================================
+        # NO PHONE
+        # =====================================================
+
+        if not phone:
+
+            print(
+                "FINAL RESULT: No phone found."
+            )
+
+        else:
+
+            print(
+                f"FINAL PHONE: {phone}"
+            )
+
+            print(
+                f"PHONE SOURCE: {phone_source}"
+            )
+
+        # =====================================================
         # RESULT
         # =====================================================
 
@@ -288,7 +750,8 @@ def get_ad_detail(page, url):
                 or description
             ),
             "posted_at": posted_at,
-            "phone": phone
+            "phone": phone,
+            "phone_source": phone_source,
         }
 
     except Exception as e:
@@ -302,7 +765,8 @@ def get_ad_detail(page, url):
         return {
             "description": "",
             "posted_at": None,
-            "phone": None
+            "phone": None,
+            "phone_source": None,
         }
 
 
@@ -419,7 +883,8 @@ def scan(already_processed=None):
     )
 
     print(
-        f"Listings found on search page: {len(listings)}"
+        f"Listings found on search page: "
+        f"{len(listings)}"
     )
 
     if not listings:
@@ -462,7 +927,9 @@ def scan(already_processed=None):
             # =================================================
 
             context = browser.new_context(
-                user_agent=HEADERS["User-Agent"]
+                user_agent=HEADERS[
+                    "User-Agent"
+                ]
             )
 
             # =================================================
@@ -509,6 +976,7 @@ def scan(already_processed=None):
                 # =============================================
 
                 if len(ads) >= MAX_ADS:
+
                     break
 
                 # =============================================
@@ -521,6 +989,7 @@ def scan(already_processed=None):
                 )
 
                 if link_tag is None:
+
                     continue
 
                 ad_url = urljoin(
@@ -536,11 +1005,13 @@ def scan(already_processed=None):
 
                     try:
 
-                        if already_processed(ad_url):
+                        if already_processed(
+                            ad_url
+                        ):
 
                             print(
-                                "Already processed, skipping: "
-                                f"{ad_url}"
+                                "Already processed, "
+                                f"skipping: {ad_url}"
                             )
 
                             continue
@@ -644,6 +1115,17 @@ def scan(already_processed=None):
                     f"Phone: {detail['phone']}"
                 )
 
+                if detail.get(
+                    "phone_source"
+                ):
+
+                    print(
+                        "Phone source:",
+                        detail[
+                            "phone_source"
+                        ]
+                    )
+
                 # =============================================
                 # DELAY
                 # =============================================
@@ -661,32 +1143,40 @@ def scan(already_processed=None):
             if page is not None:
 
                 try:
+
                     page.close()
 
                 except Exception:
+
                     pass
 
             if context is not None:
 
                 try:
+
                     context.close()
 
                 except Exception:
+
                     pass
 
             if browser is not None:
 
                 try:
+
                     browser.close()
 
                 except Exception:
+
                     pass
 
     # =====================================================
     # SAVE NEXT OFFSET
     # =====================================================
 
-    next_offset = offset + MAX_ADS
+    next_offset = (
+        offset + MAX_ADS
+    )
 
     save_offset(
         next_offset
