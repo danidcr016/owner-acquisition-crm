@@ -131,8 +131,7 @@ def save_offset(value):
 
 
 def collect_listings(session, already_processed, target):
-    listings, seen = [], set()
-    is_processed = already_processed if callable(already_processed) else lambda url: url in set(already_processed or ())
+    listings, seen = [], set(already_processed or ())
     offset = get_offset()
     pages_checked = 0
     while len(listings) < target and pages_checked < 20:
@@ -150,7 +149,7 @@ def collect_listings(session, already_processed, target):
             if not link:
                 continue
             ad_url = urljoin(url, link.get("href", "")).split("?", 1)[0]
-            if not ad_url or ad_url in seen or is_processed(ad_url):
+            if not ad_url or ad_url in seen:
                 continue
             seen.add(ad_url)
             title_node = row.select_one(".title, .posting-title, .result-title") or link
@@ -202,14 +201,62 @@ def reveal_phone(page, url):
         return None, None
 
 
+def phone_from_external_rendered(page, url):
+    """Render one relevant external contact page with the existing Playwright page."""
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=18000)
+        page.wait_for_timeout(1200)
+
+        # Highest-confidence structured contact elements first.
+        selectors = (
+            'a[href^="tel:"]',
+            '[itemprop="telephone"]',
+            '[data-phone]',
+            '.contact-phone',
+            '.phone-number',
+            '[class*="phone"]',
+            '[aria-label*="phone" i]',
+        )
+        for selector in selectors:
+            locator = page.locator(selector).first
+            if locator.count():
+                raw = (
+                    locator.get_attribute("href")
+                    or locator.get_attribute("data-phone")
+                    or locator.get_attribute("aria-label")
+                    or locator.inner_text(timeout=3000)
+                )
+                phone = normalize_phone(raw)
+                if phone:
+                    return phone
+
+        # Some rental sites reveal the number after a contact button click.
+        button = page.get_by_text(
+            re.compile(r"contact(?: the)? (?:landlord|owner|manager)|show (?:phone|contact)|call now", re.I)
+        ).first
+        if button.count():
+            try:
+                button.click(timeout=3500)
+                page.wait_for_timeout(900)
+            except Exception:
+                pass
+
+        body_text = page.locator("body").inner_text(timeout=5000)
+        return extract_phone_from_text(body_text)
+    except Exception as exc:
+        print(f"External rendered contact failed: {url}: {exc}")
+        return None
+
+
 def launch_browser(playwright):
     return playwright.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-background-networking", "--disable-extensions", "--disable-sync", "--no-first-run", "--mute-audio"])
 
 
 def scan(already_processed=None):
+    processed = set(already_processed or ())
     session = requests.Session()
     session.headers.update(HEADERS)
-    listings, next_offset = collect_listings(session, already_processed, MAX_ADS)
+    listings, next_offset = collect_listings(session, processed, MAX_ADS)
     ads = []
     print(f"Collected {len(listings)} new URLs; RSS={memory_mb():.1f} MB")
 
@@ -233,10 +280,24 @@ def scan(already_processed=None):
                             phone, source = reveal_phone(page, listing["url"])
                             detail["phone"], detail["phone_source"] = phone, source
                         if not detail["phone"] and detail.get("html"):
-                            for external in relevant_external_links(detail["html"], listing["url"]):
+                            external_links = relevant_external_links(
+                                detail["html"], listing["url"]
+                            )
+                            for external in external_links:
+                                # Fast and memory-light attempt first.
                                 phone = phone_from_external(session, external)
+                                source = "external_html"
+
+                                # JavaScript-rendered sites such as rental portals
+                                # often expose the number only after rendering.
+                                if not phone:
+                                    phone = phone_from_external_rendered(page, external)
+                                    source = "external_rendered"
+
                                 if phone:
-                                    detail["phone"], detail["phone_source"] = phone, "external"
+                                    detail["phone"] = phone
+                                    detail["phone_source"] = source
+                                    print(f"Phone found via {source}: {phone}")
                                     break
                         ads.append({"title": listing["title"], "description": detail["description"] or listing["title"], "city": listing["city"], "source": "Craigslist", "url": listing["url"], "posted_at": detail["posted_at"], "phone": detail["phone"]})
                     except requests.RequestException as exc:
