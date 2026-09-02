@@ -1674,6 +1674,9 @@ def run_craigslist_scan():
 
         if craigslist_scan_status["running"]:
 
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"started": False, "running": True}), 409
+
             return redirect("/discovery")
 
 
@@ -1706,6 +1709,9 @@ def run_craigslist_scan():
 
         thread.start()
 
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"started": True, "running": True}), 202
 
     return redirect("/discovery")
 

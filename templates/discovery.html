@@ -185,65 +185,82 @@
 <script>
 (() => {
     "use strict";
-
     const form = document.getElementById("craigslist-scan-form");
     const button = document.getElementById("craigslist-scan-button");
     const feedback = document.getElementById("scan-feedback");
-    let submitted = false;
+    const page = document.getElementById("discovery-page");
+    let running = page?.dataset.scanRunning === "true";
+    let pollTimer = null;
 
-    if (form && button) {
-        form.addEventListener("submit", (event) => {
-            if (submitted || button.disabled) {
-                event.preventDefault();
-                return;
-            }
-
-            submitted = true;
-            button.disabled = true;
-            button.setAttribute("aria-disabled", "true");
-            button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Starting scan...';
-
-            if (feedback) {
-                feedback.textContent = "The Craigslist scan is starting. Please do not submit it again.";
-                feedback.classList.remove("d-none");
-            }
-        });
+    function showRunning(message = "Scanning Craigslist...") {
+        running = true;
+        button.disabled = true;
+        button.setAttribute("aria-disabled", "true");
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}`;
+        feedback.textContent = "El escaneo se está ejecutando en segundo plano. Esta página se actualizará automáticamente al terminar.";
+        feedback.className = "alert alert-info mb-4";
     }
 
-    const discoveryPage = document.getElementById("discovery-page");
-    const scanIsRunning = discoveryPage?.dataset.scanRunning === "true";
+    function showError(message) {
+        running = false;
+        button.disabled = false;
+        button.removeAttribute("aria-disabled");
+        button.innerHTML = '<i class="bi bi-search"></i> Run Craigslist Scan';
+        feedback.textContent = message || "El escaneo no ha podido completarse.";
+        feedback.className = "alert alert-danger mb-4";
+    }
 
-    if (scanIsRunning) {
-    const refreshIntervalMs = 30000;
-    const maximumChecks = 40;
-    let completedChecks = 0;
-    let refreshTimer = null;
-
-    const scheduleRefresh = () => {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = window.setTimeout(() => {
-            if (document.visibilityState !== "visible") {
-                scheduleRefresh();
+    async function checkStatus() {
+        try {
+            const response = await fetch("/discovery/craigslist-status", {
+                headers: {"Accept": "application/json"},
+                cache: "no-store"
+            });
+            if (!response.ok) throw new Error(`Status ${response.status}`);
+            const status = await response.json();
+            if (status.running) {
+                showRunning(status.processed > 0 ? `Scanning... ${status.processed} processed` : "Scanning Craigslist...");
+                pollTimer = window.setTimeout(checkStatus, 2000);
                 return;
             }
-
-            completedChecks += 1;
-            if (completedChecks <= maximumChecks) {
-                window.location.reload();
+            if (status.error) {
+                showError(`Error: ${status.error}`);
+                return;
             }
-        }, refreshIntervalMs);
-    };
+            if (running && status.finished) {
+                feedback.textContent = `Escaneo terminado. ${status.added || 0} oportunidades nuevas añadidas.`;
+                feedback.className = "alert alert-success mb-4";
+                window.setTimeout(() => window.location.reload(), 900);
+            }
+        } catch (error) {
+            console.error(error);
+            if (running) pollTimer = window.setTimeout(checkStatus, 5000);
+        }
+    }
 
-    scheduleRefresh();
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
-            scheduleRefresh();
-        } else {
-            window.clearTimeout(refreshTimer);
+    form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (running || button.disabled) return;
+        showRunning("Starting scan...");
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                headers: {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+                credentials: "same-origin"
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok && response.status !== 409) throw new Error(data.error || `Status ${response.status}`);
+            checkStatus();
+        } catch (error) {
+            showError(`No se pudo iniciar el escaneo: ${error.message}`);
         }
     });
+
+    if (running) {
+        showRunning();
+        checkStatus();
     }
+    window.addEventListener("beforeunload", () => window.clearTimeout(pollTimer));
 })();
 </script>
 {% endblock %}

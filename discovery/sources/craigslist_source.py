@@ -131,7 +131,8 @@ def save_offset(value):
 
 
 def collect_listings(session, already_processed, target):
-    listings, seen = [], set(already_processed or ())
+    listings, seen = [], set()
+    is_processed = already_processed if callable(already_processed) else lambda url: url in set(already_processed or ())
     offset = get_offset()
     pages_checked = 0
     while len(listings) < target and pages_checked < 20:
@@ -149,7 +150,7 @@ def collect_listings(session, already_processed, target):
             if not link:
                 continue
             ad_url = urljoin(url, link.get("href", "")).split("?", 1)[0]
-            if not ad_url or ad_url in seen:
+            if not ad_url or ad_url in seen or is_processed(ad_url):
                 continue
             seen.add(ad_url)
             title_node = row.select_one(".title, .posting-title, .result-title") or link
@@ -206,10 +207,9 @@ def launch_browser(playwright):
 
 
 def scan(already_processed=None):
-    processed = set(already_processed or ())
     session = requests.Session()
     session.headers.update(HEADERS)
-    listings, next_offset = collect_listings(session, processed, MAX_ADS)
+    listings, next_offset = collect_listings(session, already_processed, MAX_ADS)
     ads = []
     print(f"Collected {len(listings)} new URLs; RSS={memory_mb():.1f} MB")
 
