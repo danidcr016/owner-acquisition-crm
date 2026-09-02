@@ -2,6 +2,7 @@
 {% block title %}Lead Discovery{% endblock %}
 
 {% block content %}
+<style>@keyframes discoverySpin{to{transform:rotate(360deg)}}.spin-icon{display:inline-block;animation:discoverySpin 1s linear infinite}</style>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1><i class="bi bi-radar"></i> Lead Discovery</h1>
@@ -63,17 +64,17 @@
                     <div>
                         <p class="text-muted mb-1">Craigslist Status</p>
                         {% if scan_running %}
-                            <h4 class="mb-0 text-warning">Running</h4>
-                            <small class="text-muted">This page checks the result every 30 seconds while visible.</small>
+                            <h4 id="craigslist-status-title" class="mb-0 text-warning">Running</h4>
+                            <small id="craigslist-status-text" class="text-muted">Scanning Craigslist ads...</small>
                         {% else %}
-                            <h4 class="mb-0 text-success">Ready</h4>
-                            <small class="text-muted">Ready for a new scan.</small>
+                            <h4 id="craigslist-status-title" class="mb-0 text-success">Ready</h4>
+                            <small id="craigslist-status-text" class="text-muted">Ready for a new scan.</small>
                         {% endif %}
                     </div>
                     {% if scan_running %}
-                        <i class="bi bi-arrow-repeat fs-1 text-warning"></i>
+                        <i id="craigslist-status-icon" class="bi bi-arrow-repeat fs-1 text-warning spin-icon"></i>
                     {% else %}
-                        <i class="bi bi-check-circle fs-1 text-success"></i>
+                        <i id="craigslist-status-icon" class="bi bi-check-circle fs-1 text-success"></i>
                     {% endif %}
                 </div>
             </div>
@@ -189,6 +190,9 @@
     const button = document.getElementById("craigslist-scan-button");
     const feedback = document.getElementById("scan-feedback");
     const page = document.getElementById("discovery-page");
+    const statusTitle = document.getElementById("craigslist-status-title");
+    const statusText = document.getElementById("craigslist-status-text");
+    const statusIcon = document.getElementById("craigslist-status-icon");
     let running = page?.dataset.scanRunning === "true";
     let pollTimer = null;
 
@@ -197,6 +201,10 @@
         button.disabled = true;
         button.setAttribute("aria-disabled", "true");
         button.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${message}`;
+        statusTitle.textContent = "Running";
+        statusTitle.className = "mb-0 text-warning";
+        statusText.textContent = "Scanning Craigslist ads...";
+        statusIcon.className = "bi bi-arrow-repeat fs-1 text-warning spin-icon";
         feedback.textContent = "El escaneo se está ejecutando en segundo plano. Esta página se actualizará automáticamente al terminar.";
         feedback.className = "alert alert-info mb-4";
     }
@@ -206,6 +214,10 @@
         button.disabled = false;
         button.removeAttribute("aria-disabled");
         button.innerHTML = '<i class="bi bi-search"></i> Run Craigslist Scan';
+        statusTitle.textContent = "Error";
+        statusTitle.className = "mb-0 text-danger";
+        statusText.textContent = "The last scan failed.";
+        statusIcon.className = "bi bi-exclamation-circle fs-1 text-danger";
         feedback.textContent = message || "El escaneo no ha podido completarse.";
         feedback.className = "alert alert-danger mb-4";
     }
