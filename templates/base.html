@@ -1,216 +1,68 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>
-
-        {% block title %}
-        Owner Acquisition CRM
-        {% endblock %}
-
-    </title>
-
-
-    <!-- =========================
-         BOOTSTRAP
-    ========================== -->
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
-
-
-    <!-- =========================
-         BOOTSTRAP ICONS
-    ========================== -->
-
-    <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-    >
-
-
-    <!-- =========================
-         CUSTOM CSS
-    ========================== -->
-
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b365d">
+    <title>{% block title %}Owner Acquisition CRM{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
-
-<body>
-
-
-    <!-- =========================
-         USER MENU
-    ========================== -->
-
-    <div class="user-menu">
-
-
-        <button
-            id="menuButton"
-            type="button"
-            class="menu-button"
-            aria-label="Open menu"
-        >
-
-            <i class="bi bi-list"></i>
-
-        </button>
-
-
-        <div
-            id="userDropdown"
-            class="user-dropdown"
-        >
-
-
-            <!-- USER INFO -->
-
-            <div class="user-info">
-
-
-                <div class="user-avatar">
-
-                    <i class="bi bi-person-fill"></i>
-
-                </div>
-
-
-                <div>
-
-                    <strong>
-
-                        {{ session.get("username", "User") }}
-
-                    </strong>
-
-
-                    <small>
-
-                        Account
-
-                    </small>
-
-                </div>
-
-
-            </div>
-
-
-            <hr>
-
-
-            <!-- LOG OUT -->
-
-            <a
-                href="/logout"
-                class="logout-button"
-            >
-
-                <i class="bi bi-box-arrow-right"></i>
-
-                Log out
-
+<body class="app-body">
+    <header class="app-header">
+        <div class="app-header-inner">
+            <a href="/" class="app-brand" aria-label="Owner Acquisition CRM dashboard">
+                <span class="app-brand-mark"><i class="bi bi-buildings"></i></span>
+                <span><strong>Owner Acquisition</strong><small>CRM Workspace</small></span>
             </a>
-
-
+            <nav class="app-nav" aria-label="Navegación principal">
+                <a href="/" class="nav-link"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                <a href="/leads" class="nav-link"><i class="bi bi-people"></i><span>Leads</span></a>
+                <a href="/follow-ups" class="nav-link"><i class="bi bi-calendar-check"></i><span>Follow-Ups</span></a>
+                {% if session.get("role") != "agent" %}
+                <a href="/discovery" class="nav-link"><i class="bi bi-radar"></i><span>Discovery</span></a>
+                {% endif %}
+            </nav>
+            <div class="user-menu">
+                <button id="menuButton" type="button" class="menu-button" aria-label="Abrir menú de usuario" aria-expanded="false">
+                    <span class="header-avatar"><i class="bi bi-person-fill"></i></span>
+                    <span class="header-user"><strong>{{ session.get("username", "User") }}</strong><small>{{ session.get("role", "Account") }}</small></span>
+                    <i class="bi bi-chevron-down menu-chevron"></i>
+                </button>
+                <div id="userDropdown" class="user-dropdown">
+                    <div class="user-info">
+                        <div class="user-avatar"><i class="bi bi-person-fill"></i></div>
+                        <div><strong>{{ session.get("username", "User") }}</strong><small>{{ session.get("role", "Account") }}</small></div>
+                    </div>
+                    <hr>
+                    <a href="/" class="dropdown-link"><i class="bi bi-grid"></i>Dashboard</a>
+                    <a href="/logout" class="logout-button"><i class="bi bi-box-arrow-right"></i>Log out</a>
+                </div>
+            </div>
         </div>
-
-
-    </div>
-
-
-    <!-- =========================
-         MAIN CONTENT
-    ========================== -->
-
-    <main class="container py-4">
-
-        {% block content %}
-
-        {% endblock %}
-
-    </main>
-
-    <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js">
-    </script>
-
-    <!-- =========================
-         USER MENU JAVASCRIPT
-    ========================== -->
-
+    </header>
+    <main class="app-main container-fluid">{% block content %}{% endblock %}</main>
+    <footer class="app-footer"><span>Owner Acquisition CRM</span><span>Simple workflows. Better follow-through.</span></footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-
-        document.addEventListener(
-            "DOMContentLoaded",
-            function () {
-
-
-                const button =
-                    document.getElementById("menuButton");
-
-
-                const dropdown =
-                    document.getElementById("userDropdown");
-
-
-                button.addEventListener(
-                    "click",
-                    function () {
-
-                        dropdown.classList.toggle("show");
-
-                    }
-                );
-
-
-                // Close menu when clicking outside
-
-                document.addEventListener(
-                    "click",
-                    function (event) {
-
-
-                        if (
-                            !button.contains(event.target) &&
-                            !dropdown.contains(event.target)
-                        ) {
-
-                            dropdown.classList.remove("show");
-
-                        }
-
-                    }
-                );
-
-
-            }
-        );
-
+        document.addEventListener("DOMContentLoaded", function () {
+            const button = document.getElementById("menuButton");
+            const dropdown = document.getElementById("userDropdown");
+            if (!button || !dropdown) return;
+            button.addEventListener("click", function (event) {
+                event.stopPropagation();
+                const isOpen = dropdown.classList.toggle("show");
+                button.setAttribute("aria-expanded", String(isOpen));
+            });
+            document.addEventListener("click", function (event) {
+                if (!button.contains(event.target) && !dropdown.contains(event.target)) {
+                    dropdown.classList.remove("show");
+                    button.setAttribute("aria-expanded", "false");
+                }
+            });
+        });
     </script>
-
-    
-{% block scripts %}
-
-{% endblock %}
-
-
+    {% block scripts %}{% endblock %}
 </body>
-
 </html>
