@@ -450,10 +450,29 @@ def request_detail(session, listing):
     description = description.replace("QR Code Link to This Post", "", 1).strip()[:MAX_DESCRIPTION_CHARS]
     time_tag = soup.select_one("time[datetime]")
     phone = extract_phone_from_html(str(body) if body else html)
-    return {"description": description, "posted_at": time_tag.get("datetime") if time_tag else None, "phone": phone, "phone_source": "html" if phone else None, "html": html if not phone else None}
+
+    contact_marker_source = str(body) if body else html
+    has_contact_control = bool(
+        re.search(
+            r"show\s+(?:contact\s+info|phone(?:\s+number)?)|"
+            r"contact\s+(?:info|information)|reply-button|"
+            r"show-contact|contactinfo|replylink",
+            contact_marker_source,
+            re.I,
+        )
+    )
+
+    return {
+        "description": description,
+        "posted_at": time_tag.get("datetime") if time_tag else None,
+        "phone": phone,
+        "phone_source": "html" if phone else None,
+        "has_contact_control": has_contact_control,
+        "html": html if not phone else None,
+    }
 
 
-def reveal_phone(page, url):
+def reveal_phone(page, url, contact_expected=False):
     """Try the public contact button once and classify protected contacts.
 
     This detects anti-bot or human-verification pages but does not attempt to
@@ -485,14 +504,41 @@ def reveal_phone(page, url):
                 if phone:
                     return phone, "dom", "phone_found"
 
-        candidates = page.get_by_text(
-            re.compile(
-                r"(?:show|more|view).*contact|contact.*info|\+\s*info",
-                re.I,
-            )
-        ).first
+        candidate_selectors = (
+            'button:has-text("show contact info")',
+            'a:has-text("show contact info")',
+            '[role="button"]:has-text("show contact info")',
+            'button:has-text("show phone")',
+            'a:has-text("show phone")',
+            '.show-contact',
+            '.show-contact-info',
+            '.reply-button',
+            '[data-action*="contact" i]',
+            '[aria-label*="contact" i]',
+        )
 
-        if not candidates.count():
+        candidates = None
+        for selector in candidate_selectors:
+            locator = page.locator(selector).first
+            if locator.count():
+                candidates = locator
+                break
+
+        if candidates is None:
+            text_candidate = page.get_by_text(
+                re.compile(
+                    r"show\s+(?:contact\s+info|phone(?:\s+number)?)|"
+                    r"contact\s+(?:info|information)|\+\s*info",
+                    re.I,
+                )
+            ).first
+            if text_candidate.count():
+                candidates = text_candidate
+
+        if candidates is None:
+            if contact_expected:
+                print("Craigslist contact control detected but requires human verification.")
+                return None, "contact_button", "human_verification_required"
             return None, None, "no_contact_found"
 
         page.once("dialog", handle_dialog)
@@ -571,7 +617,7 @@ def scan(already_processed=None):
                 cdp.send("Network.enable")
                 cdp.send("Network.setBlockedURLs", {"urls": ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg", "*.woff", "*.woff2", "*.ttf", "*.mp4", "*.webm"]})
                 for listing in batch:
-                    detail = {"description": "", "posted_at": None, "phone": None, "phone_source": None, "contact_status": "no_contact_found", "html": None}
+                    detail = {"description": "", "posted_at": None, "phone": None, "phone_source": None, "contact_status": "no_contact_found", "has_contact_control": False, "html": None}
                     try:
                         detail.update(request_detail(session, listing))
                         if detail["phone"]:
@@ -580,6 +626,7 @@ def scan(already_processed=None):
                             phone, source, contact_status = reveal_phone(
                                 page,
                                 listing["url"],
+                                contact_expected=detail.get("has_contact_control", False),
                             )
                             detail["phone"] = phone
                             detail["phone_source"] = source
