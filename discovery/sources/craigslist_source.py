@@ -78,18 +78,214 @@ def extract_phone_from_html(html):
 
 
 def relevant_external_links(html, base_url):
-    soup = BeautifulSoup(html or "", "html.parser")
-    links = []
-    host = urlparse(base_url).netloc
-    for tag in soup.select("a[href]"):
-        href = urljoin(base_url, tag.get("href", "")).split("#", 1)[0]
+    """
+    Finds and ranks external contact links.
+
+    Public property and contact pages are prioritised.
+    Application and prescreener forms are ignored.
+    """
+
+    soup = BeautifulSoup(
+        html or "",
+        "html.parser"
+    )
+
+    base_host = urlparse(
+        base_url
+    ).netloc.lower()
+
+    candidates = {}
+
+    ignored_hosts = {
+        "images.craigslist.org",
+        "google.com",
+        "www.google.com",
+        "maps.google.com",
+        "facebook.com",
+        "www.facebook.com",
+        "instagram.com",
+        "www.instagram.com",
+        "twitter.com",
+        "www.twitter.com",
+        "x.com",
+        "youtube.com",
+        "www.youtube.com",
+    }
+
+    ignored_extensions = (
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".svg",
+        ".pdf",
+        ".mp4",
+        ".webm",
+    )
+
+    for position, tag in enumerate(
+        soup.select("a[href]")
+    ):
+
+        href = urljoin(
+            base_url,
+            tag.get("href", "")
+        ).split("#", 1)[0]
+
         parsed = urlparse(href)
-        if parsed.scheme not in {"http", "https"} or parsed.netloc == host:
+
+        host = parsed.netloc.lower()
+        path = parsed.path.lower()
+
+        link_text = tag.get_text(
+            " ",
+            strip=True
+        ).lower()
+
+        combined_text = (
+            f"{href} {link_text}"
+        ).lower()
+
+        # Ignore invalid or internal links
+        if parsed.scheme not in {
+            "http",
+            "https"
+        }:
             continue
-        haystack = (href + " " + tag.get_text(" ", strip=True)).lower()
-        if any(k in haystack for k in PRIORITY_EXTERNAL) and href not in links:
-            links.append(href)
-    return links[:MAX_EXTERNAL_PAGES_PER_AD]
+
+        if not host:
+            continue
+
+        if host == base_host:
+            continue
+
+        # Ignore images, maps and social networks
+        if host in ignored_hosts:
+            continue
+
+        if path.endswith(
+            ignored_extensions
+        ):
+            continue
+
+        # Ignore application and prescreener forms
+        if any(
+            term in combined_text
+            for term in (
+                "general-prescreener",
+                "prescreener",
+                "pre-screen",
+                "application",
+                "apply-now",
+                "/apply",
+            )
+        ):
+            continue
+
+        score = 0
+
+        # Highest priority:
+        # TurboTenant public property page
+        if (
+            host == "rental.turbotenant.com"
+            and path.startswith("/p/")
+        ):
+            score += 1000
+
+        # Strong contact indicators in visible text
+        if "contact the landlord" in link_text:
+            score += 500
+
+        if "contact the owner" in link_text:
+            score += 500
+
+        if "have questions" in link_text:
+            score += 250
+
+        if any(
+            term in link_text
+            for term in (
+                "contact",
+                "landlord",
+                "owner",
+                "phone",
+                "call",
+                "questions",
+            )
+        ):
+            score += 180
+
+        # Generic public contact or property pages
+        if any(
+            term in path
+            for term in (
+                "/contact",
+                "/property",
+                "/properties",
+                "/listing",
+                "/rental",
+            )
+        ):
+            score += 120
+
+        if any(
+            term in host
+            for term in (
+                "turbotenant",
+                "property",
+                "rental",
+                "rent",
+                "leasing",
+            )
+        ):
+            score += 80
+
+        if any(
+            term in combined_text
+            for term in PRIORITY_EXTERNAL
+        ):
+            score += 30
+
+        # Links inside the Craigslist description
+        # are more relevant than global page links
+        if tag.find_parent(
+            id="postingbody"
+        ) is not None:
+            score += 100
+
+        if score <= 0:
+            continue
+
+        candidate = (
+            score,
+            -position,
+            href
+        )
+
+        previous_candidate = (
+            candidates.get(href)
+        )
+
+        if (
+            previous_candidate is None
+            or candidate > previous_candidate
+        ):
+            candidates[href] = candidate
+
+    ranked_candidates = sorted(
+        candidates.values(),
+        reverse=True
+    )
+
+    selected_links = [
+        href
+        for _, _, href in ranked_candidates[
+            :MAX_EXTERNAL_PAGES_PER_AD
+        ]
+    ]
+
+    return selected_links
 
 
 def extract_phone_from_external_html(html, url):
