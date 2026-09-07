@@ -92,14 +92,54 @@ def relevant_external_links(html, base_url):
     return links[:MAX_EXTERNAL_PAGES_PER_AD]
 
 
+def extract_phone_from_external_html(html, url):
+    """Read public contact phones from external rental listing HTML."""
+    phone = extract_phone_from_html(html)
+    if phone:
+        return phone, "external_html"
+
+    host = urlparse(url).netloc.lower()
+    trusted_script_hosts = {
+        "rental.turbotenant.com",
+        "www.turbotenant.com",
+        "turbotenant.com",
+    }
+    if host not in trusted_script_hosts:
+        return None, None
+
+    soup = BeautifulSoup(html or "", "html.parser")
+    contact_terms = (
+        "phone", "telephone", "contactinformation",
+        "contactphone", "listingspecificcontact"
+    )
+    for script in soup.find_all("script"):
+        script_text = script.string or script.get_text(" ", strip=True)
+        if not script_text:
+            continue
+        lowered = script_text.lower()
+        if not any(term in lowered for term in contact_terms):
+            continue
+        phone = extract_phone_from_text(script_text)
+        if phone:
+            return phone, "external_embedded_data"
+
+    return None, None
+
+
 def phone_from_external(session, url):
+    response = None
     try:
-        response = session.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True, stream=True)
+        response = session.get(
+            url,
+            timeout=(5, REQUEST_TIMEOUT),
+            allow_redirects=True,
+            stream=True,
+        )
         response.raise_for_status()
-        content_type = response.headers.get("content-type", "")
+        content_type = response.headers.get("content-type", "").lower()
         if "html" not in content_type:
-            return None
-        # Hard cap prevents unexpectedly huge external pages staying in memory.
+            return None, None
+
         parts, size = [], 0
         for chunk in response.iter_content(32768, decode_unicode=True):
             if not chunk:
@@ -108,15 +148,51 @@ def phone_from_external(session, url):
             size += len(chunk)
             if size >= 1_000_000:
                 break
+
         html = "".join(parts)
-        return extract_phone_from_html(html)
-    except requests.RequestException:
-        return None
+        return extract_phone_from_external_html(html, response.url)
+    except requests.RequestException as exc:
+        print(f"External HTTP contact failed: {url}: {exc}")
+        return None, None
     finally:
-        try:
-            response.close()
-        except Exception:
-            pass
+        if response is not None:
+            try:
+                response.close()
+            except Exception:
+                pass
+
+
+def phone_from_external_rendered(page, url):
+    """Use the existing Playwright page only if static external HTML fails."""
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=18000)
+        selectors = (
+            'a[href^="tel:"]', '[itemprop="telephone"]',
+            '[data-phone]', '[data-telephone]',
+            '.phone-number', '.contact-phone',
+            '[aria-label*="phone" i]',
+        )
+        for selector in selectors:
+            locator = page.locator(selector).first
+            if locator.count():
+                raw = (
+                    locator.get_attribute("href")
+                    or locator.get_attribute("data-phone")
+                    or locator.get_attribute("data-telephone")
+                    or locator.get_attribute("aria-label")
+                    or locator.inner_text(timeout=2500)
+                )
+                phone = normalize_phone(raw)
+                if phone:
+                    return phone, "external_rendered_dom"
+
+        phone = extract_phone_from_text(page.locator("body").inner_text(timeout=5000))
+        if phone:
+            return phone, "external_rendered_text"
+        return None, None
+    except Exception as exc:
+        print(f"External rendered contact failed: {url}: {exc}")
+        return None, None
 
 
 def get_offset():
@@ -234,10 +310,20 @@ def scan(already_processed=None):
                             phone, source = reveal_phone(page, listing["url"])
                             detail["phone"], detail["phone_source"] = phone, source
                         if not detail["phone"] and detail.get("html"):
-                            for external in relevant_external_links(detail["html"], listing["url"]):
-                                phone = phone_from_external(session, external)
+                            external_urls = relevant_external_links(
+                                detail["html"], listing["url"]
+                            )
+                            if external_urls:
+                                print(f"Relevant external contact URL selected: {external_urls[0]}")
+
+                            for external in external_urls:
+                                phone, source = phone_from_external(session, external)
+                                if not phone:
+                                    phone, source = phone_from_external_rendered(page, external)
                                 if phone:
-                                    detail["phone"], detail["phone_source"] = phone, "external"
+                                    detail["phone"] = phone
+                                    detail["phone_source"] = source
+                                    print(f"Phone found via {source}: {phone}")
                                     break
                         ads.append({"title": listing["title"], "description": detail["description"] or listing["title"], "city": listing["city"], "source": "Craigslist", "url": listing["url"], "posted_at": detail["posted_at"], "phone": detail["phone"]})
                     except requests.RequestException as exc:
