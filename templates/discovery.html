@@ -83,6 +83,12 @@
 </div>
 
 <div id="discovery-page" data-scan-running="{{ 'true' if scan_running else 'false' }}">
+{% if request.args.get("deleted") is not none %}
+<div class="alert alert-success mb-4" role="status">
+    <i class="bi bi-check-circle-fill"></i>
+    {{ request.args.get("deleted") }} opportunities without a phone number were deleted.
+</div>
+{% endif %}
 <div id="scan-feedback" class="alert alert-info d-none mb-4" role="status" aria-live="polite"></div>
 
 <div class="d-flex gap-2 mb-4">
@@ -97,6 +103,12 @@
             {% else %}
                 <i class="bi bi-search"></i> Run Craigslist Scan
             {% endif %}
+        </button>
+    </form>
+    <form action="/discovery/delete-without-phone" method="POST"
+          onsubmit="return confirm('This permanently deletes every Discovery opportunity without a phone number. Continue?');">
+        <button type="submit" class="btn btn-outline-danger" {% if scan_running %}disabled{% endif %}>
+            <i class="bi bi-trash3-fill"></i> Delete all without phone
         </button>
     </form>
 </div>

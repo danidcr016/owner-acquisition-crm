@@ -398,11 +398,17 @@ def create_discovery_lead(
     # Existing opportunity
     if existing_lead:
 
-        # Add phone if we did not have one before
+        changed = False
+
         if phone and not existing_lead.phone:
-
             existing_lead.phone = phone
+            existing_lead.contact_status = "phone_found"
+            changed = True
+        elif contact_status and existing_lead.contact_status != contact_status:
+            existing_lead.contact_status = contact_status
+            changed = True
 
+        if changed:
             db.session.commit()
 
         return existing_lead
@@ -425,6 +431,7 @@ def create_discovery_lead(
         city=city,
 
         phone=phone,
+        contact_status=("phone_found" if phone else contact_status),
 
         source=source,
 
@@ -1689,6 +1696,31 @@ def delete_discovery(id):
 
 
     return redirect("/discovery")
+
+
+# =========================================================
+# DELETE DISCOVERY LEADS WITHOUT PHONE
+# =========================================================
+@app.route("/discovery/delete-without-phone", methods=["POST"])
+def delete_discovery_without_phone():
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    deleted_count = DiscoveryLead.query.filter(
+        db.or_(
+            DiscoveryLead.phone.is_(None),
+            db.func.trim(DiscoveryLead.phone) == ""
+        )
+    ).delete(synchronize_session=False)
+
+    db.session.commit()
+    return redirect(
+        "/discovery?sort=newest&contact=all&deleted="
+        f"{deleted_count}"
+    )
 
 
 # =========================================================
