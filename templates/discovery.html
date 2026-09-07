@@ -17,7 +17,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <p class="text-muted mb-1">Total Opportunities</p>
-                        <h2 class="mb-0">{{ opportunities|length }}</h2>
+                        <h2 class="mb-0">{{ total_opportunities }}</h2>
                     </div>
                     <i class="bi bi-database-fill fs-1 text-primary"></i>
                 </div>
@@ -101,6 +101,35 @@
     </form>
 </div>
 
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="/discovery" class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="sort" class="form-label">Sort by</label>
+                <select id="sort" name="sort" class="form-select">
+                    <option value="phone_first" {% if sort_by == "phone_first" %}selected{% endif %}>Phone first</option>
+                    <option value="newest" {% if sort_by == "newest" %}selected{% endif %}>Newest found first</option>
+                    <option value="oldest" {% if sort_by == "oldest" %}selected{% endif %}>Oldest found first</option>
+                    <option value="score_high" {% if sort_by == "score_high" %}selected{% endif %}>Highest score</option>
+                    <option value="score_low" {% if sort_by == "score_low" %}selected{% endif %}>Lowest score</option>
+                </select>
+            </div>
+            <div class="col-md-5">
+                <label for="contact" class="form-label">Contact status</label>
+                <select id="contact" name="contact" class="form-select">
+                    <option value="all" {% if contact_filter == "all" %}selected{% endif %}>All contact statuses</option>
+                    <option value="phone_found" {% if contact_filter == "phone_found" %}selected{% endif %}>Phone found</option>
+                    <option value="human_verification_required" {% if contact_filter == "human_verification_required" %}selected{% endif %}>Human verification</option>
+                    <option value="external_contact_found" {% if contact_filter == "external_contact_found" %}selected{% endif %}>External contact</option>
+                    <option value="no_contact_found" {% if contact_filter == "no_contact_found" %}selected{% endif %}>No phone</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill"></i> Apply</button>
+            </div>
+        </form>
+    </div>
+</div>
 <div class="card shadow">
     <div class="card-body">
         {% if opportunities %}
@@ -175,6 +204,21 @@
                 </tbody>
             </table>
         </div>
+        {% if pagination.pages > 1 %}
+        <nav class="mt-4" aria-label="Discovery pagination">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <small class="text-muted">Page {{ pagination.page }} of {{ pagination.pages }} | {{ pagination.total }} matching opportunities</small>
+                <ul class="pagination mb-0">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" href="{{ url_for('discovery', page=pagination.prev_num if pagination.has_prev else 1, sort=sort_by, contact=contact_filter) }}">Previous</a></li>
+                    {% for n in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if n %}<li class="page-item {% if n == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('discovery', page=n, sort=sort_by, contact=contact_filter) }}">{{ n }}</a></li>
+                        {% else %}<li class="page-item disabled"><span class="page-link">...</span></li>{% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" href="{{ url_for('discovery', page=pagination.next_num if pagination.has_next else pagination.pages, sort=sort_by, contact=contact_filter) }}">Next</a></li>
+                </ul>
+            </div>
+        </nav>
+        {% endif %}
         {% else %}
         <div class="text-center py-5">
             <i class="bi bi-search fs-1 text-muted"></i>

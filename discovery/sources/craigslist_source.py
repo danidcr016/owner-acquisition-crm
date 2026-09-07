@@ -451,7 +451,7 @@ def request_detail(session, listing):
     time_tag = soup.select_one("time[datetime]")
     phone = extract_phone_from_html(str(body) if body else html)
 
-    contact_marker_source = str(body) if body else html
+    contact_marker_source = html
     has_contact_control = bool(
         re.search(
             r"show\s+(?:contact\s+info|phone(?:\s+number)?)|"

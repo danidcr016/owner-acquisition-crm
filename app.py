@@ -1443,51 +1443,87 @@ def delete_follow_up(id):
 
 @app.route("/discovery")
 def discovery():
-
     if not session.get("logged_in"):
         return redirect("/login")
 
-
     user = current_user()
-
-
     if not user:
-
         session.clear()
-
         return redirect("/login")
 
-
-    # Agents cannot access Discovery
     if user.role == "agent":
-
         return redirect("/")
 
+    sort_by = request.args.get("sort", "phone_first").strip()
+    contact_filter = request.args.get("contact", "all").strip()
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
 
-    opportunities = DiscoveryLead.query.order_by(
-        case(
-            (DiscoveryLead.phone.isnot(None), 0),
-            else_=1
-        ).asc(),
-        DiscoveryLead.score.desc(),
-        DiscoveryLead.found_at.desc()
-    ).all()
+    query = DiscoveryLead.query
 
+    if contact_filter == "phone_found":
+        query = query.filter(
+            DiscoveryLead.phone.isnot(None),
+            DiscoveryLead.phone != ""
+        )
+    elif contact_filter in {
+        "human_verification_required",
+        "external_contact_found",
+        "no_contact_found",
+    }:
+        query = query.filter(
+            DiscoveryLead.contact_status == contact_filter
+        )
+    else:
+        contact_filter = "all"
 
-    return render_template(
+    if sort_by == "newest":
+        query = query.order_by(
+            DiscoveryLead.found_at.desc(),
+            DiscoveryLead.id.desc()
+        )
+    elif sort_by == "oldest":
+        query = query.order_by(
+            DiscoveryLead.found_at.asc(),
+            DiscoveryLead.id.asc()
+        )
+    elif sort_by == "score_high":
+        query = query.order_by(
+            DiscoveryLead.score.desc(),
+            DiscoveryLead.found_at.desc()
+        )
+    elif sort_by == "score_low":
+        query = query.order_by(
+            DiscoveryLead.score.asc(),
+            DiscoveryLead.found_at.desc()
+        )
+    else:
+        sort_by = "phone_first"
+        query = query.order_by(
+            case(
+                (DiscoveryLead.phone.isnot(None), 0),
+                else_=1
+            ).asc(),
+            DiscoveryLead.score.desc(),
+            DiscoveryLead.found_at.desc()
+        )
 
-        "discovery.html",
-
-        opportunities=opportunities,
-
-        current_user=user,
-
-        scan_running=craigslist_scan_status["running"],
-
-        last_scan_count=craigslist_scan_status["added"]
-
+    pagination = query.paginate(
+        page=page,
+        per_page=25,
+        error_out=False
     )
 
+    return render_template(
+        "discovery.html",
+        opportunities=pagination.items,
+        pagination=pagination,
+        total_opportunities=DiscoveryLead.query.count(),
+        sort_by=sort_by,
+        contact_filter=contact_filter,
+        current_user=user,
+        scan_running=craigslist_scan_status["running"],
+        last_scan_count=craigslist_scan_status["added"]
+    )
 
 # =========================================================
 # CRAIGSLIST BACKGROUND SCAN
