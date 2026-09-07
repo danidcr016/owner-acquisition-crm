@@ -454,25 +454,97 @@ def request_detail(session, listing):
 
 
 def reveal_phone(page, url):
+    """Try the public contact button once and classify protected contacts.
+
+    This detects anti-bot or human-verification pages but does not attempt to
+    solve or bypass them.
+    """
+    dialog_messages = []
+
+    def handle_dialog(dialog):
+        dialog_messages.append(dialog.message or "")
+        try:
+            dialog.accept()
+        except Exception:
+            pass
+
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=18000)
-        # Check DOM before clicking.
-        for selector in ('a[href^="tel:"]', '[itemprop="telephone"]', '.reply-tel-number', '.contact-phone'):
+
+        for selector in (
+            'a[href^="tel:"]',
+            '[itemprop="telephone"]',
+            '.reply-tel-number',
+            '.contact-phone',
+        ):
             loc = page.locator(selector).first
             if loc.count():
-                phone = normalize_phone(loc.get_attribute("href") or loc.inner_text())
+                phone = normalize_phone(
+                    loc.get_attribute("href") or loc.inner_text()
+                )
                 if phone:
-                    return phone, "dom"
-        candidates = page.get_by_text(re.compile(r"(?:show|more|view).*contact|contact.*info|\+\s*info", re.I)).first
-        if candidates.count():
-            candidates.click(timeout=4000)
-            page.wait_for_timeout(800)
-            phone = extract_phone_from_text(page.locator("body").inner_text(timeout=4000))
+                    return phone, "dom", "phone_found"
+
+        candidates = page.get_by_text(
+            re.compile(
+                r"(?:show|more|view).*contact|contact.*info|\+\s*info",
+                re.I,
+            )
+        ).first
+
+        if not candidates.count():
+            return None, None, "no_contact_found"
+
+        page.once("dialog", handle_dialog)
+        candidates.click(timeout=4000)
+
+        deadline = time.monotonic() + 5.0
+        challenge_pattern = re.compile(
+            r"captcha|recaptcha|verify (?:you are|that you are|human)|"
+            r"human verification|security check|unusual traffic|"
+            r"an error has occurred|access denied|are you a robot",
+            re.I,
+        )
+
+        while time.monotonic() < deadline:
+            if dialog_messages:
+                message = " ".join(dialog_messages)
+                if challenge_pattern.search(message) or message.strip():
+                    print(f"Craigslist contact requires human verification: {message}")
+                    return None, "contact_button", "human_verification_required"
+
+            for selector in (
+                'a[href^="tel:"]',
+                '.reply-tel-number',
+                '.contact-phone',
+                '[itemprop="telephone"]',
+            ):
+                loc = page.locator(selector).first
+                if loc.count():
+                    phone = normalize_phone(
+                        loc.get_attribute("href") or loc.inner_text()
+                    )
+                    if phone:
+                        return phone, "contact_button", "phone_found"
+
+            body_text = page.locator("body").inner_text(timeout=2500)
+            phone = extract_phone_from_text(body_text)
             if phone:
-                return phone, "contact_button"
-        return None, None
-    except (PlaywrightTimeoutError, Exception):
-        return None, None
+                return phone, "contact_button", "phone_found"
+
+            if challenge_pattern.search(body_text):
+                print("Craigslist contact requires human verification.")
+                return None, "contact_button", "human_verification_required"
+
+            page.wait_for_timeout(250)
+
+        return None, "contact_button", "human_verification_required"
+
+    except PlaywrightTimeoutError:
+        return None, "contact_button", "human_verification_required"
+    except Exception as exc:
+        print(f"Craigslist contact button failed: {exc}")
+        return None, "contact_button", "human_verification_required"
 
 
 def launch_browser(playwright):
@@ -499,12 +571,19 @@ def scan(already_processed=None):
                 cdp.send("Network.enable")
                 cdp.send("Network.setBlockedURLs", {"urls": ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg", "*.woff", "*.woff2", "*.ttf", "*.mp4", "*.webm"]})
                 for listing in batch:
-                    detail = {"description": "", "posted_at": None, "phone": None, "phone_source": None, "html": None}
+                    detail = {"description": "", "posted_at": None, "phone": None, "phone_source": None, "contact_status": "no_contact_found", "html": None}
                     try:
                         detail.update(request_detail(session, listing))
-                        if not detail["phone"]:
-                            phone, source = reveal_phone(page, listing["url"])
-                            detail["phone"], detail["phone_source"] = phone, source
+                        if detail["phone"]:
+                            detail["contact_status"] = "phone_found"
+                        else:
+                            phone, source, contact_status = reveal_phone(
+                                page,
+                                listing["url"],
+                            )
+                            detail["phone"] = phone
+                            detail["phone_source"] = source
+                            detail["contact_status"] = contact_status
                         if not detail["phone"] and detail.get("html"):
                             external_urls = relevant_external_links(
                                 detail["html"], listing["url"]
@@ -519,9 +598,17 @@ def scan(already_processed=None):
                                 if phone:
                                     detail["phone"] = phone
                                     detail["phone_source"] = source
+                                    detail["contact_status"] = "phone_found"
                                     print(f"Phone found via {source}: {phone}")
                                     break
-                        ads.append({"title": listing["title"], "description": detail["description"] or listing["title"], "city": listing["city"], "source": "Craigslist", "url": listing["url"], "posted_at": detail["posted_at"], "phone": detail["phone"]})
+
+                            if (
+                                not detail["phone"]
+                                and external_urls
+                                and detail["contact_status"] != "human_verification_required"
+                            ):
+                                detail["contact_status"] = "external_contact_found"
+                        ads.append({"title": listing["title"], "description": detail["description"] or listing["title"], "city": listing["city"], "source": "Craigslist", "url": listing["url"], "posted_at": detail["posted_at"], "phone": detail["phone"], "contact_status": detail["contact_status"]})
                     except requests.RequestException as exc:
                         print(f"Skip {listing['url']}: {exc}")
                     finally:

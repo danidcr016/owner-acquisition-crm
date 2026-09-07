@@ -137,6 +137,10 @@
                         <td>
                             {% if item.phone %}
                                 <span class="badge bg-success fs-6"><i class="bi bi-telephone-fill"></i> {{ item.phone }}</span>
+                            {% elif item.contact_status == "human_verification_required" %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-person-check-fill"></i> Human verification</span>
+                            {% elif item.contact_status == "external_contact_found" %}
+                                <span class="badge bg-info text-dark"><i class="bi bi-box-arrow-up-right"></i> External contact</span>
                             {% else %}
                                 <span class="badge bg-secondary"><i class="bi bi-telephone-x"></i> No phone</span>
                             {% endif %}

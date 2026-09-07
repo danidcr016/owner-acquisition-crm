@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 from flask import Flask, render_template, request, redirect, session, jsonify
 from datetime import datetime
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, case
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from discovery_scoring import calculate_score
@@ -288,6 +288,12 @@ class DiscoveryLead(db.Model):
         db.String(50)
     )
 
+    contact_status = db.Column(
+        db.String(40),
+        nullable=False,
+        default="no_contact_found"
+    )
+
     source = db.Column(
         db.String(100)
     )
@@ -380,7 +386,8 @@ def create_discovery_lead(
     source,
     url,
     phone=None,
-    score=None
+    score=None,
+    contact_status="no_contact_found"
 ):
 
     existing_lead = DiscoveryLead.query.filter_by(
@@ -1458,7 +1465,12 @@ def discovery():
 
 
     opportunities = DiscoveryLead.query.order_by(
-        DiscoveryLead.score.desc()
+        case(
+            (DiscoveryLead.phone.isnot(None), 0),
+            else_=1
+        ).asc(),
+        DiscoveryLead.score.desc(),
+        DiscoveryLead.found_at.desc()
     ).all()
 
 
@@ -1808,6 +1820,30 @@ with app.app_context():
 
             connection.commit()
 
+
+
+    # Add contact_status if missing
+    if "contact_status" not in discovery_lead_columns:
+
+        with db.engine.connect() as connection:
+
+            connection.execute(
+                text(
+                    "ALTER TABLE discovery_lead "
+                    "ADD COLUMN contact_status VARCHAR(40) "
+                    "NOT NULL DEFAULT 'no_contact_found'"
+                )
+            )
+
+            connection.execute(
+                text(
+                    "UPDATE discovery_lead "
+                    "SET contact_status = 'phone_found' "
+                    "WHERE phone IS NOT NULL AND phone <> ''"
+                )
+            )
+
+            connection.commit()
 
     # =====================================================
     # CREATE DEFAULT USERS
