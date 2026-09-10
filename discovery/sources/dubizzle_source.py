@@ -110,7 +110,6 @@ def launch_browser(playwright):
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--disable-background-networking",
             "--disable-extensions",
             "--disable-sync",
             "--no-first-run",
@@ -145,7 +144,7 @@ def block_heavy_assets(context, page):
 
 def wait_for_agency_cards(page):
     try:
-        page.locator('a[href*="/property-agencies/"] h2').first.wait_for(
+        page.locator('h2').filter(has_text=re.compile(r"Real Estate|Properties|Home|Capital|Realty|Broker", re.I)).first.wait_for(
             state="visible",
             timeout=PAGE_TIMEOUT,
         )
@@ -159,7 +158,7 @@ def wait_for_agency_cards(page):
 
 def agency_cards(page):
     """Return card locators without relying on unstable Material UI classes."""
-    headings = page.locator('a[href*="/property-agencies/"] h2')
+    headings = page.locator('a[href*="/property-agencies/"] h2, h2')
     cards = []
     used_urls = set()
 
@@ -169,10 +168,20 @@ def agency_cards(page):
         if not name:
             continue
 
-        link = heading.locator("xpath=ancestor::a[1]")
+        link = heading.locator(
+            "xpath=ancestor::a[contains(@href, '/property-agencies/')][1]"
+        )
+        if not link.count():
+            link = heading.locator(
+                "xpath=following::a[contains(@href, '/property-agencies/')][1]"
+            )
         href = link.get_attribute("href") if link.count() else None
         agency_url = urljoin(BASE_URL, href or "").split("?", 1)[0]
-        if not agency_url or agency_url in used_urls:
+        if (
+            not href
+            or agency_url.rstrip("/") == BASE_URL.rstrip("/")
+            or agency_url in used_urls
+        ):
             continue
 
         # Find the smallest ancestor that contains this heading plus the
@@ -334,7 +343,7 @@ def scan(already_processed=None):
                 locale="en-AE",
             )
             page = context.new_page()
-            block_heavy_assets(context, page)
+            page.set_default_timeout(PAGE_TIMEOUT)
 
             for current_page in range(1, MAX_PAGES + 1):
                 if len(ads) >= MAX_ADS:
@@ -342,7 +351,33 @@ def scan(already_processed=None):
 
                 url = page_url(current_page)
                 print(f"Reading Dubizzle agencies page {current_page}: {url}")
-                page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+                response = page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=PAGE_TIMEOUT,
+                )
+                status = response.status if response is not None else None
+                print(
+                    f"Dubizzle response: status={status}; "
+                    f"final_url={page.url}; title={page.title()!r}"
+                )
+
+                # Dubizzle may continue rendering after DOMContentLoaded.
+                try:
+                    page.wait_for_load_state("networkidle", timeout=10000)
+                except PlaywrightTimeoutError:
+                    pass
+
+                body_text = page.locator("body").inner_text(timeout=5000).strip()
+                if not body_text:
+                    screenshot_path = "/tmp/dubizzle_blank_page.png"
+                    page.screenshot(path=screenshot_path, full_page=False)
+                    raise DubizzlePageError(
+                        f"Dubizzle returned an empty rendered page. "
+                        f"status={status}; final_url={page.url}; "
+                        f"screenshot={screenshot_path}"
+                    )
+
                 wait_for_agency_cards(page)
 
                 cards = agency_cards(page)
