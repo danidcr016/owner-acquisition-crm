@@ -84,10 +84,10 @@ db = SQLAlchemy(app)
 
 
 # =========================================================
-# DISCOVERY SCAN STATUS
+# CRAIGSLIST SCAN STATUS
 # =========================================================
 
-discovery_scan_status = {
+craigslist_scan_status = {
 
     "running": False,
 
@@ -101,7 +101,7 @@ discovery_scan_status = {
 }
 
 
-discovery_scan_lock = threading.Lock()
+craigslist_scan_lock = threading.Lock()
 
 
 # =========================================================
@@ -1528,15 +1528,15 @@ def discovery():
         sort_by=sort_by,
         contact_filter=contact_filter,
         current_user=user,
-        scan_running=discovery_scan_status["running"],
-        last_scan_count=discovery_scan_status["added"]
+        scan_running=craigslist_scan_status["running"],
+        last_scan_count=craigslist_scan_status["added"]
     )
 
 # =========================================================
-# PROPERTY FINDER BACKGROUND SCAN
+# CRAIGSLIST BACKGROUND SCAN
 # =========================================================
 
-def run_discovery_background():
+def run_craigslist_background():
 
     try:
 
@@ -1557,58 +1557,68 @@ def run_discovery_background():
             # START STATUS
             # -------------------------------------------------
 
-            discovery_scan_status["running"] = True
+            craigslist_scan_status["running"] = True
 
-            discovery_scan_status["processed"] = 0
+            craigslist_scan_status["processed"] = 0
 
-            discovery_scan_status["added"] = 0
+            craigslist_scan_status["added"] = 0
 
-            discovery_scan_status["finished"] = False
+            craigslist_scan_status["finished"] = False
 
-            discovery_scan_status["error"] = None
+            craigslist_scan_status["error"] = None
 
 
             # -------------------------------------------------
-            # SCAN PROPERTY FINDER
+            # SCAN CRAIGSLIST
             # -------------------------------------------------
+
+            def save_incrementally(ad):
+
+                existed_before = already_processed(
+                    ad.get("url", "")
+                )
+
+                saved_items = discovery_engine.process_ads(
+                    [ad],
+                    create_discovery_lead
+                )
+
+                craigslist_scan_status["processed"] += 1
+
+                if saved_items and not existed_before:
+                    craigslist_scan_status["added"] += 1
+
+                print(
+                    "Property Finder incremental save:",
+                    ad.get("title", ""),
+                    "processed=",
+                    craigslist_scan_status["processed"],
+                    "added=",
+                    craigslist_scan_status["added"],
+                    flush=True
+                )
+
 
             ads = discovery_engine.scan(
 
-                already_processed=already_processed
+                already_processed=already_processed,
+
+                on_result=save_incrementally
 
             )
 
 
-            discovery_scan_status["processed"] = len(
-                ads
-            )
-
-
-            # -------------------------------------------------
-            # SAVE ADS
-            # -------------------------------------------------
-
-            saved_ads = discovery_engine.process_ads(
-
-                ads,
-
-                create_discovery_lead
-
-            )
-
-
-            discovery_scan_status["added"] = len(
-                saved_ads
-            )
+            # Results have already been saved one by one.
+            saved_ads = ads
 
 
             # -------------------------------------------------
             # FINISHED
             # -------------------------------------------------
 
-            discovery_scan_status["finished"] = True
+            craigslist_scan_status["finished"] = True
 
-            discovery_scan_status["running"] = False
+            craigslist_scan_status["running"] = False
 
 
             print(
@@ -1626,21 +1636,21 @@ def run_discovery_background():
         )
 
 
-        discovery_scan_status["error"] = str(e)
+        craigslist_scan_status["error"] = str(e)
 
-        discovery_scan_status["running"] = False
+        craigslist_scan_status["running"] = False
 
-        discovery_scan_status["finished"] = True
+        craigslist_scan_status["finished"] = True
 
 
 # =========================================================
-# DISCOVERY SCAN STATUS
+# CRAIGSLIST SCAN STATUS
 # =========================================================
 
 @app.route(
     "/discovery/craigslist-status"
 )
-def discovery_scan_status_route():
+def craigslist_status():
 
     if not session.get("logged_in"):
 
@@ -1660,7 +1670,7 @@ def discovery_scan_status_route():
 
 
     return jsonify(
-        discovery_scan_status
+        craigslist_scan_status
     )
 
 
@@ -1724,14 +1734,14 @@ def delete_discovery_without_phone():
 
 
 # =========================================================
-# RUN PROPERTY FINDER SCAN
+# RUN CRAIGSLIST SCAN
 # =========================================================
 
 @app.route(
     "/discovery/run-craigslist",
     methods=["POST"]
 )
-def run_discovery_scan():
+def run_craigslist_scan():
 
     if not session.get("logged_in"):
 
@@ -1750,9 +1760,9 @@ def run_discovery_scan():
     # Prevent duplicate scans
     # -----------------------------------------------------
 
-    with discovery_scan_lock:
+    with craigslist_scan_lock:
 
-        if discovery_scan_status["running"]:
+        if craigslist_scan_status["running"]:
 
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return jsonify({"started": False, "running": True}), 409
@@ -1764,15 +1774,15 @@ def run_discovery_scan():
         # Reset status
         # -------------------------------------------------
 
-        discovery_scan_status["running"] = True
+        craigslist_scan_status["running"] = True
 
-        discovery_scan_status["processed"] = 0
+        craigslist_scan_status["processed"] = 0
 
-        discovery_scan_status["added"] = 0
+        craigslist_scan_status["added"] = 0
 
-        discovery_scan_status["finished"] = False
+        craigslist_scan_status["finished"] = False
 
-        discovery_scan_status["error"] = None
+        craigslist_scan_status["error"] = None
 
 
         # -------------------------------------------------
@@ -1781,7 +1791,7 @@ def run_discovery_scan():
 
         thread = threading.Thread(
 
-            target=run_discovery_background
+            target=run_craigslist_background
 
         )
 

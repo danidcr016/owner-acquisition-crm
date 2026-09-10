@@ -1,11 +1,12 @@
 """Property Finder company source for Owner-CRM.
 
 Drop-in API:
-    scan(already_processed=None) -> list[dict]
+    scan(already_processed=None, on_result=None) -> list[dict]
 
-Discovers UAE real-estate companies from /en/find-broker, keeps companies
-with rental inventory, opens each public company profile, reveals the public
-"Call Company" number, and returns Owner-CRM-compatible dictionaries.
+The source discovers UAE companies from /en/find-broker, keeps companies with
+rental inventory, opens each public company profile, reveals the public
+"Call Company" number, and emits every completed company immediately through
+on_result. A fresh Chromium process is used for each company.
 """
 import json
 import os
@@ -105,17 +106,12 @@ def first(data, *keys, default=None):
 
 def collect_companies(session, already_processed, target):
     processed = set() if callable(already_processed) else set(already_processed or ())
-    is_processed = (
-        already_processed
-        if callable(already_processed)
-        else lambda url: url in processed
-    )
+    is_processed = already_processed if callable(already_processed) else lambda url: url in processed
     companies, seen = [], set()
 
     for number in range(1, MAX_PAGES + 1):
         if len(companies) >= target:
             break
-
         response = session.get(page_url(number), timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
@@ -125,7 +121,6 @@ def collect_companies(session, already_processed, target):
             href = link.get("href", "").split("?", 1)[0]
             if not BROKER_PATH_RE.fullmatch(href):
                 continue
-
             url = urljoin(BASE_URL, href).rstrip("/")
             if url in seen or is_processed(url):
                 continue
@@ -137,47 +132,28 @@ def collect_companies(session, already_processed, target):
                     ancestor = ancestor.parent
                     if ancestor is None:
                         break
-                    candidate = " ".join(
-                        ancestor.get_text(" ", strip=True).split()
-                    )
-                    if (
-                        "for rent" in candidate.lower()
-                        and "agents" in candidate.lower()
-                    ):
+                    candidate = " ".join(ancestor.get_text(" ", strip=True).split())
+                    if "for rent" in candidate.lower() and "agents" in candidate.lower():
                         card_text = candidate
                         break
 
-            rent_match = re.search(
-                r"for\s+rent\s*:?\s*([\d,]+)",
-                card_text,
-                re.I,
-            )
+            rent_match = re.search(r"for\s+rent\s*:?\s*([\d,]+)", card_text, re.I)
             rentals = parse_int(rent_match.group(1)) if rent_match else 0
             if rentals < MIN_RENTALS:
                 continue
 
             seen.add(url)
-            companies.append(
-                {
-                    "url": url,
-                    "directory_text": card_text,
-                    "rentals": rentals,
-                }
-            )
+            companies.append({"url": url, "directory_text": card_text, "rentals": rentals})
             page_added += 1
-
             if len(companies) >= target:
                 break
 
         print(
-            f"Property Finder companies page {number}: "
-            f"{page_added} new rental companies",
+            f"Property Finder companies page {number}: {page_added} new rental companies",
             flush=True,
         )
-
         if page_added == 0:
             break
-
         time.sleep(DELAY)
 
     return companies
@@ -187,23 +163,11 @@ def parse_company_profile(session, company):
     response = session.get(company["url"], timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
-    next_data = json_script(soup, "__NEXT_DATA__")
-    page_props = next_data.get("props", {}).get("pageProps", {})
+    page_props = json_script(soup, "__NEXT_DATA__").get("props", {}).get("pageProps", {})
 
-    required = {
-        "orn",
-        "licenseNumber",
-        "address",
-        "activeListings",
-        "agentsCount",
-        "superAgentsCount",
-    }
+    required = {"orn", "licenseNumber", "address", "activeListings", "agentsCount", "superAgentsCount"}
     candidates = list(deep_find_dict(page_props, required))
-    data = max(
-        candidates,
-        key=lambda item: len(required.intersection(item.keys())),
-        default={},
-    )
+    data = max(candidates, key=lambda item: len(required.intersection(item.keys())), default={})
 
     heading = soup.find("h1")
     title = first(data, "name", "title", "brokerName", "companyName")
@@ -214,12 +178,9 @@ def parse_company_profile(session, company):
 
     text = " ".join(soup.get_text(" ", strip=True).split())
     location_match = re.search(
-        r"Location\s*:\s*([A-Za-z ]+?)"
-        r"(?:\s+Agents\s*:|\s+SuperAgents\s*:)",
-        company["directory_text"],
-        re.I,
+        r"Location\s*:\s*([A-Za-z ]+?)(?:\s+Agents\s*:|\s+SuperAgents\s*:)",
+        company["directory_text"], re.I,
     )
-
     raw_location = first(data, "city", "location", "emirate", default="")
     if isinstance(raw_location, dict):
         location = str(first(raw_location, "name", "title", default=""))
@@ -228,26 +189,9 @@ def parse_company_profile(session, company):
     if not location and location_match:
         location = location_match.group(1).strip()
 
-    rent_match = re.search(
-        r"for\s+rent\s*:?\s*([\d,]+)",
-        company["directory_text"],
-        re.I,
-    )
-    sale_match = re.search(
-        r"for\s+sale\s*:?\s*([\d,]+)",
-        company["directory_text"],
-        re.I,
-    )
-    agents_match = re.search(
-        r"Agents\s*:\s*([\d,]+)",
-        company["directory_text"],
-        re.I,
-    )
-    super_match = re.search(
-        r"SuperAgents\s*:\s*([\d,]+)",
-        company["directory_text"],
-        re.I,
-    )
+    def directory_count(label):
+        match = re.search(rf"{label}\s*:?\s*([\d,]+)", company["directory_text"], re.I)
+        return parse_int(match.group(1)) if match else 0
 
     orn = first(data, "orn", "licenseNumber", "registrationNumber", default="")
     if not orn:
@@ -256,51 +200,28 @@ def parse_company_profile(session, company):
 
     address = first(data, "address", "officeAddress", default="")
     if isinstance(address, dict):
-        address = first(
-            address,
-            "streetAddress",
-            "name",
-            "address",
-            default="",
-        )
+        address = first(address, "streetAddress", "name", "address", default="")
     if not address:
         match = re.search(
-            r"Address\s*:\s*(.+?)"
-            r"(?:\s+Call Company|\s+Email Company|\s+About\s+)",
-            text,
-            re.I,
+            r"Address\s*:\s*(.+?)(?:\s+Call Company|\s+Email Company|\s+About\s+)",
+            text, re.I,
         )
         address = match.group(1).strip() if match else ""
 
-    active = parse_int(
-        first(data, "activeListings", "activeListingsCount", "totalProperties")
-    )
+    active = parse_int(first(data, "activeListings", "activeListingsCount", "totalProperties"))
     if not active:
         match = re.search(r"([\d,]+)\s+Active Listings", text, re.I)
         active = parse_int(match.group(1)) if match else 0
 
     description = first(data, "description", "about", "bio", default="")
-
     return {
         "title": str(title).strip(),
         "city": location or "UAE",
         "url": company["url"],
-        "rentals": (
-            parse_int(rent_match.group(1))
-            if rent_match
-            else company["rentals"]
-        ),
-        "sales": parse_int(sale_match.group(1)) if sale_match else 0,
-        "agents": (
-            parse_int(agents_match.group(1))
-            if agents_match
-            else parse_int(first(data, "agentsCount", "agentCount"))
-        ),
-        "superagents": (
-            parse_int(super_match.group(1))
-            if super_match
-            else parse_int(first(data, "superAgentsCount", "superAgentCount"))
-        ),
+        "rentals": directory_count(r"for\s+rent") or company["rentals"],
+        "sales": directory_count(r"for\s+sale"),
+        "agents": directory_count("Agents") or parse_int(first(data, "agentsCount", "agentCount")),
+        "superagents": directory_count("SuperAgents") or parse_int(first(data, "superAgentsCount", "superAgentCount")),
         "active": active,
         "orn": str(orn or ""),
         "address": str(address or ""),
@@ -308,30 +229,41 @@ def parse_company_profile(session, company):
     }
 
 
-def reveal_company_phone(page, url, company_name):
+def reveal_company_phone(playwright, url, company_name):
+    browser = context = page = None
     try:
+        print(f"Launching fresh Chromium for: {company_name}", flush=True)
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
+                "--disable-extensions", "--disable-sync", "--no-first-run",
+                "--mute-audio",
+            ],
+        )
+        context = browser.new_context(
+            user_agent=HEADERS["User-Agent"],
+            locale="en-AE",
+            service_workers="block",
+            java_script_enabled=True,
+            viewport={"width": 1280, "height": 720},
+        )
+        page = context.new_page()
+        page.set_default_timeout(PAGE_TIMEOUT)
+        cdp = context.new_cdp_session(page)
+        cdp.send("Network.enable")
+        cdp.send("Network.setBlockedURLs", {"urls": [
+            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg",
+            "*.woff", "*.woff2", "*.ttf", "*.mp4", "*.webm",
+        ]})
+
         print(f"Navigating Chromium to: {url}", flush=True)
+        page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+        print(f"Chromium loaded company page: {page.url}", flush=True)
 
-        page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=PAGE_TIMEOUT,
-        )
-
-        print(
-            f"Chromium loaded company page: {page.url}",
-            flush=True,
-        )
-
-        button = page.get_by_text(
-            re.compile(r"^\s*Call Company\s*$", re.I)
-        ).first
+        button = page.get_by_text(re.compile(r"^\s*Call Company\s*$", re.I)).first
         button.wait_for(state="visible", timeout=PAGE_TIMEOUT)
-
-        print(
-            f"Call Company button visible for: {company_name}",
-            flush=True,
-        )
+        print(f"Call Company button visible for: {company_name}", flush=True)
 
         try:
             button.click(timeout=5000, no_wait_after=True)
@@ -346,43 +278,32 @@ def reveal_company_phone(page, url, company_name):
             ):
                 try:
                     if locator.count():
-                        raw = (
-                            locator.get_attribute("href")
-                            or locator.inner_text(timeout=1000)
-                        )
+                        raw = locator.get_attribute("href") or locator.inner_text(timeout=1000)
                         phone = normalize_phone(raw)
                         if phone:
-                            print(
-                                f"Company phone found for {company_name}: {phone}",
-                                flush=True,
-                            )
+                            print(f"Company phone found for {company_name}: {phone}", flush=True)
                             return phone
                 except Exception:
                     pass
 
-            phone = extract_phone(
-                page.locator("body").inner_text(timeout=2000)
-            )
+            phone = extract_phone(page.locator("body").inner_text(timeout=2000))
             if phone:
-                print(
-                    f"Company phone found for {company_name}: {phone}",
-                    flush=True,
-                )
+                print(f"Company phone found for {company_name}: {phone}", flush=True)
                 return phone
-
             page.wait_for_timeout(250)
 
     except PlaywrightTimeoutError:
-        print(
-            f"Call Company timed out for {company_name}",
-            flush=True,
-        )
+        print(f"Call Company timed out for {company_name}", flush=True)
     except Exception as exc:
-        print(
-            f"Call Company failed for {company_name}: {exc}",
-            flush=True,
-        )
-
+        print(f"Call Company failed for {company_name}: {exc}", flush=True)
+    finally:
+        for obj in (page, context, browser):
+            if obj is not None:
+                try:
+                    obj.close()
+                except Exception:
+                    pass
+        print(f"Chromium closed for: {company_name}", flush=True)
     return None
 
 
@@ -403,135 +324,50 @@ def make_description(company):
     return " | ".join(parts)
 
 
-def scan(already_processed=None):
+def scan(already_processed=None, on_result=None):
     session = requests.Session()
     session.headers.update(HEADERS)
     results = []
 
     try:
-        candidates = collect_companies(
-            session,
-            already_processed,
-            MAX_ADS * 3,
-        )
-        print(
-            f"Collected {len(candidates)} Property Finder company profiles",
-            flush=True,
-        )
+        candidates = collect_companies(session, already_processed, MAX_ADS * 3)
+        print(f"Collected {len(candidates)} Property Finder company profiles", flush=True)
 
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-extensions",
-                    "--disable-sync",
-                    "--no-first-run",
-                    "--mute-audio",
-                ],
-            )
+            for candidate in candidates:
+                if len(results) >= MAX_ADS:
+                    break
 
-            context = browser.new_context(
-                user_agent=HEADERS["User-Agent"],
-                locale="en-AE",
-                service_workers="block",
-                java_script_enabled=True,
-                viewport={"width": 1280, "height": 720},
-            )
+                print(f"Processing company candidate: {candidate['url']}", flush=True)
+                try:
+                    company = parse_company_profile(session, candidate)
+                    print(f"Company profile parsed: {company['title']}", flush=True)
+                    phone = reveal_company_phone(
+                        playwright, company["url"], company["title"]
+                    )
+                    result = {
+                        "title": company["title"],
+                        "description": make_description(company),
+                        "city": company["city"],
+                        "source": "Property Finder",
+                        "url": company["url"],
+                        "posted_at": None,
+                        "phone": phone,
+                        "contact_status": "phone_found" if phone else "no_contact_found",
+                    }
 
-            page = context.new_page()
-            page.set_default_timeout(PAGE_TIMEOUT)
-
-            cdp = context.new_cdp_session(page)
-            cdp.send("Network.enable")
-            cdp.send(
-                "Network.setBlockedURLs",
-                {
-                    "urls": [
-                        "*.png",
-                        "*.jpg",
-                        "*.jpeg",
-                        "*.gif",
-                        "*.webp",
-                        "*.svg",
-                        "*.woff",
-                        "*.woff2",
-                        "*.ttf",
-                        "*.mp4",
-                        "*.webm",
-                    ]
-                },
-            )
-
-            try:
-                for candidate in candidates:
-                    if len(results) >= MAX_ADS:
-                        break
-
+                    # Save immediately before moving to the next company.
+                    if on_result is not None:
+                        on_result(result)
+                    results.append(result)
                     print(
-                        f"Processing company candidate: {candidate['url']}",
+                        f"Completed company: {company['title']}; "
+                        f"phone={'yes' if phone else 'no'}; total={len(results)}",
                         flush=True,
                     )
-
-                    try:
-                        company = parse_company_profile(session, candidate)
-
-                        print(
-                            f"Company profile parsed: {company['title']}",
-                            flush=True,
-                        )
-                        print(
-                            f"Opening Call Company for: {company['title']}",
-                            flush=True,
-                        )
-
-                        phone = reveal_company_phone(
-                            page,
-                            company["url"],
-                            company["title"],
-                        )
-
-                        results.append(
-                            {
-                                "title": company["title"],
-                                "description": make_description(company),
-                                "city": company["city"],
-                                "source": "Property Finder",
-                                "url": company["url"],
-                                "posted_at": None,
-                                "phone": phone,
-                                "contact_status": (
-                                    "phone_found"
-                                    if phone
-                                    else "no_contact_found"
-                                ),
-                            }
-                        )
-
-                        print(
-                            f"Added company: {company['title']}; "
-                            f"phone={'yes' if phone else 'no'}",
-                            flush=True,
-                        )
-
-                    except (
-                        requests.RequestException,
-                        ValueError,
-                        json.JSONDecodeError,
-                    ) as exc:
-                        print(
-                            f"Skip {candidate['url']}: {exc}",
-                            flush=True,
-                        )
-
-                    time.sleep(DELAY)
-
-            finally:
-                context.close()
-                browser.close()
-
+                except (requests.RequestException, ValueError, json.JSONDecodeError) as exc:
+                    print(f"Skip {candidate['url']}: {exc}", flush=True)
+                time.sleep(DELAY)
     finally:
         session.close()
 
