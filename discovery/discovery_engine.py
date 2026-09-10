@@ -1,5 +1,5 @@
 from discovery_scoring import calculate_score
-from discovery.sources import test_source, craigslist_source
+from discovery.sources import test_source, dubizzle_source
 
 
 # =========================================================
@@ -8,7 +8,7 @@ from discovery.sources import test_source, craigslist_source
 
 def scan(already_processed=None):
 
-    return craigslist_source.scan(
+    return dubizzle_source.scan(
         already_processed=already_processed
     )
 
