@@ -1,5 +1,5 @@
 from discovery_scoring import calculate_score
-from discovery.sources import test_source, dubizzle_source
+from discovery.sources import test_source, propertyfinder_source
 
 
 # =========================================================
@@ -8,7 +8,7 @@ from discovery.sources import test_source, dubizzle_source
 
 def scan(already_processed=None):
 
-    return dubizzle_source.scan(
+    return propertyfinder_source.scan(
         already_processed=already_processed
     )
 
