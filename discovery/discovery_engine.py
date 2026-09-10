@@ -56,6 +56,11 @@ def analyze(ad):
 
         "phone": ad.get(
             "phone"
+        ),
+
+        "contact_status": ad.get(
+            "contact_status",
+            "no_contact_found"
         )
 
     }
@@ -112,6 +117,11 @@ def process_ads(
 
             phone=scored_ad.get(
                 "phone"
+            ),
+
+            contact_status=scored_ad.get(
+                "contact_status",
+                "no_contact_found"
             ),
 
             score=scored_ad["score"]

@@ -1,5 +1,11 @@
-"""Property Finder agent source for Owner-CRM.
-Drop-in API: scan(already_processed=None) -> list[dict].
+"""Property Finder company source for Owner-CRM.
+
+Drop-in API:
+    scan(already_processed=None) -> list[dict]
+
+Discovers UAE real-estate companies from /en/find-broker, keeps companies
+with rental inventory, opens each public company profile, reveals the public
+"Call Company" number, and returns Owner-CRM-compatible dictionaries.
 """
 import json
 import os
@@ -9,15 +15,28 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 BASE_URL = "https://www.propertyfinder.ae"
-DIRECTORY_URL = os.getenv("PROPERTYFINDER_DIRECTORY_URL", BASE_URL + "/en/find-agent")
+DIRECTORY_URL = os.getenv(
+    "PROPERTYFINDER_DIRECTORY_URL",
+    BASE_URL + "/en/find-broker",
+)
 MAX_ADS = int(os.getenv("SCRAPER_MAX_ADS", "30"))
 MAX_PAGES = int(os.getenv("PROPERTYFINDER_MAX_PAGES", "10"))
 REQUEST_TIMEOUT = int(os.getenv("SCRAPER_TIMEOUT", "30"))
+PAGE_TIMEOUT = int(os.getenv("PROPERTYFINDER_PAGE_TIMEOUT", "30000"))
+PHONE_TIMEOUT = int(os.getenv("PROPERTYFINDER_PHONE_TIMEOUT", "7000"))
 DELAY = float(os.getenv("SCRAPER_DELAY", "1.0"))
 MIN_RENTALS = int(os.getenv("PROPERTYFINDER_MIN_RENTALS", "1"))
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36"}
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36"
+    )
+}
+BROKER_PATH_RE = re.compile(r"/en/broker/[a-z0-9-]+(?:-\d+){1,2}/?", re.I)
+UAE_PHONE_RE = re.compile(r"(?<!\d)(?:\+?971|00971|0)[\s()-]*\d(?:[\s()-]*\d){7,9}(?!\d)")
 
 
 def normalize_phone(raw):
@@ -31,154 +50,273 @@ def normalize_phone(raw):
     return None
 
 
-def directory_url(page_number):
-    if page_number <= 1:
+def extract_phone(text):
+    for match in UAE_PHONE_RE.finditer(text or ""):
+        phone = normalize_phone(match.group(0))
+        if phone:
+            return phone
+    return None
+
+
+def page_url(number):
+    if number <= 1:
         return DIRECTORY_URL
     separator = "&" if "?" in DIRECTORY_URL else "?"
-    return f"{DIRECTORY_URL}{separator}page={page_number}"
+    return f"{DIRECTORY_URL}{separator}page={number}"
 
 
-def get_json_script(soup, *, script_id=None, script_type=None):
-    attrs = {}
-    if script_id:
-        attrs["id"] = script_id
-    if script_type:
-        attrs["type"] = script_type
-    tag = soup.find("script", attrs=attrs)
+def json_script(soup, script_id):
+    tag = soup.find("script", id=script_id)
     if not tag:
-        return None
+        return {}
     raw = tag.string or tag.get_text()
-    return json.loads(raw) if raw else None
+    return json.loads(raw) if raw else {}
 
 
-def collect_profile_urls(session, already_processed, target):
+def deep_find_dict(value, required_keys):
+    if isinstance(value, dict):
+        if required_keys.intersection(value.keys()):
+            yield value
+        for child in value.values():
+            yield from deep_find_dict(child, required_keys)
+    elif isinstance(value, list):
+        for child in value:
+            yield from deep_find_dict(child, required_keys)
+
+
+def parse_int(value):
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    match = re.search(r"\d[\d,]*", str(value))
+    return int(match.group(0).replace(",", "")) if match else 0
+
+
+def first(data, *keys, default=None):
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return default
+
+
+def collect_companies(session, already_processed, target):
     processed = set() if callable(already_processed) else set(already_processed or ())
     is_processed = already_processed if callable(already_processed) else lambda url: url in processed
-    urls, seen = [], set()
+    companies, seen = [], set()
 
-    for page_number in range(1, MAX_PAGES + 1):
-        if len(urls) >= target:
+    for number in range(1, MAX_PAGES + 1):
+        if len(companies) >= target:
             break
-        url = directory_url(page_number)
-        response = session.get(url, timeout=REQUEST_TIMEOUT)
+        response = session.get(page_url(number), timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        page_urls = []
+        page_added = 0
+
         for link in soup.find_all("a", href=True):
-            href = link.get("href", "")
-            if not re.fullmatch(r"/en/agent/[a-z0-9-]+-\d+/?", href, re.I):
+            href = link.get("href", "").split("?", 1)[0]
+            if not BROKER_PATH_RE.fullmatch(href):
                 continue
-            profile_url = urljoin(BASE_URL, href).rstrip("/")
-            if profile_url in seen or is_processed(profile_url):
+            url = urljoin(BASE_URL, href).rstrip("/")
+            if url in seen or is_processed(url):
                 continue
-            seen.add(profile_url)
-            page_urls.append(profile_url)
-            urls.append(profile_url)
-            if len(urls) >= target:
+
+            card_text = " ".join(link.parent.get_text(" ", strip=True).split())
+            if "for rent" not in card_text.lower():
+                ancestor = link
+                for _ in range(5):
+                    ancestor = ancestor.parent
+                    if ancestor is None:
+                        break
+                    candidate = " ".join(ancestor.get_text(" ", strip=True).split())
+                    if "for rent" in candidate.lower() and "agents" in candidate.lower():
+                        card_text = candidate
+                        break
+
+            rent_match = re.search(r"for\s+rent\s*:?\s*([\d,]+)", card_text, re.I)
+            rentals = parse_int(rent_match.group(1)) if rent_match else 0
+            if rentals < MIN_RENTALS:
+                continue
+
+            seen.add(url)
+            companies.append({"url": url, "directory_text": card_text, "rentals": rentals})
+            page_added += 1
+            if len(companies) >= target:
                 break
-        print(f"Property Finder directory page {page_number}: {len(page_urls)} new profiles")
-        if not page_urls:
+
+        print(f"Property Finder companies page {number}: {page_added} new rental companies")
+        if page_added == 0:
             break
         time.sleep(DELAY)
-    return urls
+
+    return companies
 
 
-def broker_name(broker):
-    if isinstance(broker, dict):
-        return broker.get("name") or broker.get("title") or ""
-    return str(broker or "")
-
-
-def list_text(value):
-    if isinstance(value, list):
-        parts = []
-        for item in value:
-            if isinstance(item, dict):
-                text = item.get("name") or item.get("title") or item.get("label")
-            else:
-                text = str(item)
-            if text:
-                parts.append(text)
-        return ", ".join(parts)
-    if isinstance(value, dict):
-        return value.get("name") or value.get("title") or value.get("label") or ""
-    return str(value or "")
-
-
-def parse_profile(session, url):
-    response = session.get(url, timeout=REQUEST_TIMEOUT)
+def parse_company_profile(session, company):
+    response = session.get(company["url"], timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
-    next_data = get_json_script(soup, script_id="__NEXT_DATA__") or {}
+    next_data = json_script(soup, "__NEXT_DATA__")
     page_props = next_data.get("props", {}).get("pageProps", {})
-    agent = page_props.get("agent") or {}
-    if not isinstance(agent, dict) or not agent.get("name"):
-        raise ValueError("Agent data not found in __NEXT_DATA__")
 
-    rent_residential = int(agent.get("propertiesResidentialForRentCount") or 0)
-    rent_commercial = int(agent.get("propertiesCommercialForRentCount") or 0)
-    sale_residential = int(agent.get("propertiesResidentialForSaleCount") or 0)
-    sale_commercial = int(agent.get("propertiesCommercialForSaleCount") or 0)
-    rental_count = rent_residential + rent_commercial
+    required = {"orn", "licenseNumber", "address", "activeListings", "agentsCount", "superAgentsCount"}
+    candidates = list(deep_find_dict(page_props, required))
+    data = max(candidates, key=lambda item: len(required.intersection(item.keys())), default={})
 
-    phone = normalize_phone(agent.get("phone")) or normalize_phone(agent.get("whatsappPhone"))
-    agency = broker_name(agent.get("broker"))
-    languages = list_text(agent.get("languages"))
-    locations = list_text(agent.get("topLocations"))
-    position = str(agent.get("position") or "")
+    heading = soup.find("h1")
+    title = first(data, "name", "title", "brokerName", "companyName")
+    if not title and heading:
+        title = heading.get_text(" ", strip=True)
+    if not title:
+        title = company["directory_text"].split("Head office", 1)[0].strip()
 
-    description_parts = [f"Agency: {agency}" if agency else None,
-                         f"Position: {position}" if position else None,
-                         f"Residential rentals: {rent_residential}",
-                         f"Commercial rentals: {rent_commercial}",
-                         f"Residential sales: {sale_residential}",
-                         f"Commercial sales: {sale_commercial}",
-                         f"Total properties: {int(agent.get('totalProperties') or 0)}",
-                         f"Languages: {languages}" if languages else None,
-                         f"Top locations: {locations}" if locations else None,
-                         f"License: {agent.get('licenseNumber')}" if agent.get("licenseNumber") else None,
-                         f"Verified: {'Yes' if agent.get('verified') else 'No'}",
-                         f"SuperAgent: {'Yes' if agent.get('superagent') else 'No'}"]
+    text = " ".join(soup.get_text(" ", strip=True).split())
+    location_match = re.search(r"Location\s*:\s*([A-Za-z ]+?)(?:\s+Agents\s*:|\s+SuperAgents\s*:)", company["directory_text"], re.I)
+    location = str(first(data, "city", "location", "emirate", default="") or "")
+    if isinstance(first(data, "location"), dict):
+        location = str(first(first(data, "location"), "name", "title", default=""))
+    if not location and location_match:
+        location = location_match.group(1).strip()
 
+    rent_match = re.search(r"for\s+rent\s*:?\s*([\d,]+)", company["directory_text"], re.I)
+    sale_match = re.search(r"for\s+sale\s*:?\s*([\d,]+)", company["directory_text"], re.I)
+    agents_match = re.search(r"Agents\s*:\s*([\d,]+)", company["directory_text"], re.I)
+    super_match = re.search(r"SuperAgents\s*:\s*([\d,]+)", company["directory_text"], re.I)
+
+    orn = first(data, "orn", "licenseNumber", "registrationNumber", default="")
+    if not orn:
+        match = re.search(r"\bORN\s*(\d+)", text, re.I)
+        orn = match.group(1) if match else ""
+
+    address = first(data, "address", "officeAddress", default="")
+    if isinstance(address, dict):
+        address = first(address, "streetAddress", "name", "address", default="")
+    if not address:
+        match = re.search(r"Address\s*:\s*(.+?)(?:\s+Call Company|\s+Email Company|\s+About\s+)", text, re.I)
+        address = match.group(1).strip() if match else ""
+
+    active = parse_int(first(data, "activeListings", "activeListingsCount", "totalProperties"))
+    if not active:
+        match = re.search(r"([\d,]+)\s+Active Listings", text, re.I)
+        active = parse_int(match.group(1)) if match else 0
+
+    description = first(data, "description", "about", "bio", default="")
     return {
-        "title": str(agent.get("name")).strip(),
-        "description": " | ".join(part for part in description_parts if part),
-        "city": locations or "UAE",
-        "source": "Property Finder",
-        "url": url,
-        "posted_at": None,
-        "phone": phone,
-        "contact_status": "phone_found" if phone else "no_contact_found",
-        "rental_count": rental_count,
+        "title": str(title).strip(),
+        "city": location or "UAE",
+        "url": company["url"],
+        "rentals": parse_int(rent_match.group(1)) if rent_match else company["rentals"],
+        "sales": parse_int(sale_match.group(1)) if sale_match else 0,
+        "agents": parse_int(agents_match.group(1)) if agents_match else parse_int(first(data, "agentsCount", "agentCount")),
+        "superagents": parse_int(super_match.group(1)) if super_match else parse_int(first(data, "superAgentsCount", "superAgentCount")),
+        "active": active,
+        "orn": str(orn or ""),
+        "address": str(address or ""),
+        "about": " ".join(str(description or "").split())[:1500],
     }
+
+
+def reveal_company_phone(page, url, company_name):
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+        button = page.get_by_text(re.compile(r"^\s*Call Company\s*$", re.I)).first
+        button.wait_for(state="visible", timeout=PAGE_TIMEOUT)
+
+        # The first click changes the CTA text/href to the public telephone.
+        try:
+            button.click(timeout=5000, no_wait_after=True)
+        except Exception:
+            button.evaluate("element => element.click()")
+
+        deadline = time.monotonic() + PHONE_TIMEOUT / 1000
+        while time.monotonic() < deadline:
+            for locator in (
+                page.locator('a[href^="tel:"]').first,
+                page.get_by_text(UAE_PHONE_RE).first,
+            ):
+                try:
+                    if locator.count():
+                        raw = locator.get_attribute("href") or locator.inner_text(timeout=1000)
+                        phone = normalize_phone(raw)
+                        if phone:
+                            print(f"Company phone found for {company_name}: {phone}")
+                            return phone
+                except Exception:
+                    pass
+            phone = extract_phone(page.locator("body").inner_text(timeout=2000))
+            if phone:
+                print(f"Company phone found for {company_name}: {phone}")
+                return phone
+            page.wait_for_timeout(250)
+    except PlaywrightTimeoutError:
+        print(f"Call Company timed out for {company_name}")
+    except Exception as exc:
+        print(f"Call Company failed for {company_name}: {exc}")
+    return None
+
+
+def make_description(company):
+    parts = [
+        f"For rent: {company['rentals']}",
+        f"For sale: {company['sales']}",
+        f"Active listings: {company['active']}",
+        f"Agents: {company['agents']}",
+        f"SuperAgents: {company['superagents']}",
+    ]
+    if company["orn"]:
+        parts.append(f"ORN: {company['orn']}")
+    if company["address"]:
+        parts.append(f"Address: {company['address']}")
+    if company["about"]:
+        parts.append(f"About: {company['about']}")
+    return " | ".join(parts)
 
 
 def scan(already_processed=None):
     session = requests.Session()
     session.headers.update(HEADERS)
     results = []
-    # Collect extra candidates because profiles with no rentals are skipped.
-    target_candidates = min(MAX_ADS * 4, MAX_ADS + 100)
     try:
-        urls = collect_profile_urls(session, already_processed, target_candidates)
-        print(f"Collected {len(urls)} Property Finder profile URLs")
-        for url in urls:
-            if len(results) >= MAX_ADS:
-                break
+        # Gather extra companies because a profile or phone lookup can fail.
+        candidates = collect_companies(session, already_processed, MAX_ADS * 3)
+        print(f"Collected {len(candidates)} Property Finder company profiles")
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-extensions", "--mute-audio"],
+            )
+            context = browser.new_context(user_agent=HEADERS["User-Agent"], locale="en-AE", service_workers="block")
+            page = context.new_page()
             try:
-                agent = parse_profile(session, url)
-                if agent.pop("rental_count", 0) < MIN_RENTALS:
-                    print(f"Skip profile without rentals: {url}")
-                    continue
-                results.append(agent)
-                print(f"Added {agent['title']}; phone={'yes' if agent['phone'] else 'no'}")
-            except (requests.RequestException, ValueError, json.JSONDecodeError) as exc:
-                print(f"Skip {url}: {exc}")
-            time.sleep(DELAY)
+                for candidate in candidates:
+                    if len(results) >= MAX_ADS:
+                        break
+                    try:
+                        company = parse_company_profile(session, candidate)
+                        phone = reveal_company_phone(page, company["url"], company["title"])
+                        results.append({
+                            "title": company["title"],
+                            "description": make_description(company),
+                            "city": company["city"],
+                            "source": "Property Finder",
+                            "url": company["url"],
+                            "posted_at": None,
+                            "phone": phone,
+                            "contact_status": "phone_found" if phone else "no_contact_found",
+                        })
+                        print(f"Added company: {company['title']}; phone={'yes' if phone else 'no'}")
+                    except (requests.RequestException, ValueError, json.JSONDecodeError) as exc:
+                        print(f"Skip {candidate['url']}: {exc}")
+                    time.sleep(DELAY)
+            finally:
+                context.close()
+                browser.close()
     finally:
         session.close()
 
-    print(f"Property Finder scan completed: agents={len(results)}; phones={sum(bool(x.get('phone')) for x in results)}")
+    print(f"Property Finder scan completed: companies={len(results)}; phones={sum(bool(x.get('phone')) for x in results)}")
     return results
 
 

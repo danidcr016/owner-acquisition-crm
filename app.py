@@ -84,10 +84,10 @@ db = SQLAlchemy(app)
 
 
 # =========================================================
-# CRAIGSLIST SCAN STATUS
+# DISCOVERY SCAN STATUS
 # =========================================================
 
-craigslist_scan_status = {
+discovery_scan_status = {
 
     "running": False,
 
@@ -101,7 +101,7 @@ craigslist_scan_status = {
 }
 
 
-craigslist_scan_lock = threading.Lock()
+discovery_scan_lock = threading.Lock()
 
 
 # =========================================================
@@ -1528,15 +1528,15 @@ def discovery():
         sort_by=sort_by,
         contact_filter=contact_filter,
         current_user=user,
-        scan_running=craigslist_scan_status["running"],
-        last_scan_count=craigslist_scan_status["added"]
+        scan_running=discovery_scan_status["running"],
+        last_scan_count=discovery_scan_status["added"]
     )
 
 # =========================================================
-# CRAIGSLIST BACKGROUND SCAN
+# PROPERTY FINDER BACKGROUND SCAN
 # =========================================================
 
-def run_craigslist_background():
+def run_discovery_background():
 
     try:
 
@@ -1557,19 +1557,19 @@ def run_craigslist_background():
             # START STATUS
             # -------------------------------------------------
 
-            craigslist_scan_status["running"] = True
+            discovery_scan_status["running"] = True
 
-            craigslist_scan_status["processed"] = 0
+            discovery_scan_status["processed"] = 0
 
-            craigslist_scan_status["added"] = 0
+            discovery_scan_status["added"] = 0
 
-            craigslist_scan_status["finished"] = False
+            discovery_scan_status["finished"] = False
 
-            craigslist_scan_status["error"] = None
+            discovery_scan_status["error"] = None
 
 
             # -------------------------------------------------
-            # SCAN CRAIGSLIST
+            # SCAN PROPERTY FINDER
             # -------------------------------------------------
 
             ads = discovery_engine.scan(
@@ -1579,7 +1579,7 @@ def run_craigslist_background():
             )
 
 
-            craigslist_scan_status["processed"] = len(
+            discovery_scan_status["processed"] = len(
                 ads
             )
 
@@ -1597,7 +1597,7 @@ def run_craigslist_background():
             )
 
 
-            craigslist_scan_status["added"] = len(
+            discovery_scan_status["added"] = len(
                 saved_ads
             )
 
@@ -1606,13 +1606,13 @@ def run_craigslist_background():
             # FINISHED
             # -------------------------------------------------
 
-            craigslist_scan_status["finished"] = True
+            discovery_scan_status["finished"] = True
 
-            craigslist_scan_status["running"] = False
+            discovery_scan_status["running"] = False
 
 
             print(
-                "Craigslist scan completed:",
+                "Property Finder scan completed:",
                 len(saved_ads),
                 "new ads added."
             )
@@ -1621,26 +1621,26 @@ def run_craigslist_background():
     except Exception as e:
 
         print(
-            "Craigslist scan failed:",
+            "Property Finder scan failed:",
             repr(e)
         )
 
 
-        craigslist_scan_status["error"] = str(e)
+        discovery_scan_status["error"] = str(e)
 
-        craigslist_scan_status["running"] = False
+        discovery_scan_status["running"] = False
 
-        craigslist_scan_status["finished"] = True
+        discovery_scan_status["finished"] = True
 
 
 # =========================================================
-# CRAIGSLIST SCAN STATUS
+# DISCOVERY SCAN STATUS
 # =========================================================
 
 @app.route(
     "/discovery/craigslist-status"
 )
-def craigslist_status():
+def discovery_scan_status_route():
 
     if not session.get("logged_in"):
 
@@ -1660,7 +1660,7 @@ def craigslist_status():
 
 
     return jsonify(
-        craigslist_scan_status
+        discovery_scan_status
     )
 
 
@@ -1724,14 +1724,14 @@ def delete_discovery_without_phone():
 
 
 # =========================================================
-# RUN CRAIGSLIST SCAN
+# RUN PROPERTY FINDER SCAN
 # =========================================================
 
 @app.route(
     "/discovery/run-craigslist",
     methods=["POST"]
 )
-def run_craigslist_scan():
+def run_discovery_scan():
 
     if not session.get("logged_in"):
 
@@ -1750,9 +1750,9 @@ def run_craigslist_scan():
     # Prevent duplicate scans
     # -----------------------------------------------------
 
-    with craigslist_scan_lock:
+    with discovery_scan_lock:
 
-        if craigslist_scan_status["running"]:
+        if discovery_scan_status["running"]:
 
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return jsonify({"started": False, "running": True}), 409
@@ -1764,15 +1764,15 @@ def run_craigslist_scan():
         # Reset status
         # -------------------------------------------------
 
-        craigslist_scan_status["running"] = True
+        discovery_scan_status["running"] = True
 
-        craigslist_scan_status["processed"] = 0
+        discovery_scan_status["processed"] = 0
 
-        craigslist_scan_status["added"] = 0
+        discovery_scan_status["added"] = 0
 
-        craigslist_scan_status["finished"] = False
+        discovery_scan_status["finished"] = False
 
-        craigslist_scan_status["error"] = None
+        discovery_scan_status["error"] = None
 
 
         # -------------------------------------------------
@@ -1781,7 +1781,7 @@ def run_craigslist_scan():
 
         thread = threading.Thread(
 
-            target=run_craigslist_background
+            target=run_discovery_background
 
         )
 
