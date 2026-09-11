@@ -37,6 +37,18 @@ HEADERS = {
 }
 BROKER_PATH_RE = re.compile(r"/en/broker/[a-z0-9-]+(?:-\d+){1,2}/?", re.I)
 
+# Strong indicators that a company is focused on temporary accommodation.
+# This is a priority classification, not proof of a specific contract length.
+SHORT_TERM_PATTERNS = (
+    ("holiday homes", re.compile(r"\bholiday\s+homes?\b", re.I)),
+    ("vacation homes", re.compile(r"\bvacation\s+homes?\b", re.I)),
+    ("short term", re.compile(r"\bshort[\s-]+term\b", re.I)),
+    ("short stay", re.compile(r"\bshort[\s-]+stays?\b", re.I)),
+    ("serviced apartments", re.compile(r"\bserviced?\s+apartments?\b", re.I)),
+    ("monthly rental", re.compile(r"\bmonthly\s+rent(?:al|als)?\b", re.I)),
+    ("corporate housing", re.compile(r"\bcorporate\s+housing\b", re.I)),
+)
+
 
 def build_session():
     session = requests.Session()
@@ -131,8 +143,39 @@ def extract_location(broker):
     return str(value or "UAE").strip() or "UAE"
 
 
+def classify_short_term_company(broker, company_name, url):
+    """Return a structured short-term priority classification.
+
+    The current version uses strong wording in the company name, URL slug,
+    email and any available broker description. General agencies are kept.
+    """
+    searchable_parts = [
+        company_name,
+        url,
+        first(broker, "email", default=""),
+        first(broker, "description", "about", "bio", default=""),
+    ]
+    searchable_text = " ".join(str(value or "") for value in searchable_parts)
+
+    reasons = []
+    for label, pattern in SHORT_TERM_PATTERNS:
+        if pattern.search(searchable_text):
+            reasons.append(label)
+
+    return {
+        "is_short_term": bool(reasons),
+        "short_term_priority": "high" if reasons else "general",
+        "short_term_reason": ", ".join(reasons) if reasons else "",
+    }
+
+
 def make_description(company):
     parts = [
+        (
+            "Temporary rental priority: High"
+            if company["is_short_term"]
+            else "Temporary rental priority: General"
+        ),
         f"For rent: {company['rentals']}",
         f"For sale: {company['sales']}",
         f"Active listings: {company['active']}",
@@ -143,6 +186,8 @@ def make_description(company):
         parts.append(f"ORN: {company['orn']}")
     if company["address"]:
         parts.append(f"Address: {company['address']}")
+    if company["short_term_reason"]:
+        parts.append(f"Temporary indicators: {company['short_term_reason']}")
     if company["email"]:
         parts.append(f"Email: {company['email']}")
     return " | ".join(parts)
@@ -163,8 +208,10 @@ def broker_to_result(broker):
         return None
 
     phone = normalize_phone(first(broker, "phone", "telephone", "mobile"))
+    title = str(first(broker, "name", "title", default="Unknown company")).strip()
+    classification = classify_short_term_company(broker, title, url)
     company = {
-        "title": str(first(broker, "name", "title", default="Unknown company")).strip(),
+        "title": title,
         "city": extract_location(broker),
         "url": url,
         "rentals": rentals,
@@ -180,6 +227,9 @@ def broker_to_result(broker):
         "orn": str(first(broker, "orn", "licenseNumber", "registrationNumber", default="") or ""),
         "address": str(first(broker, "address", "officeAddress", default="") or ""),
         "email": str(first(broker, "email", default="") or ""),
+        "is_short_term": classification["is_short_term"],
+        "short_term_priority": classification["short_term_priority"],
+        "short_term_reason": classification["short_term_reason"],
     }
     return {
         "title": company["title"],
@@ -190,6 +240,9 @@ def broker_to_result(broker):
         "posted_at": None,
         "phone": phone,
         "contact_status": "phone_found" if phone else "no_contact_found",
+        "is_short_term": company["is_short_term"],
+        "short_term_priority": company["short_term_priority"],
+        "short_term_reason": company["short_term_reason"],
     }
 
 
@@ -253,6 +306,7 @@ def scan(already_processed=None, on_result=None):
                 print(
                     f"Completed company: {result['title']}; "
                     f"phone={'yes' if result['phone'] else 'no'}; "
+                    f"temporary={result['short_term_priority']}; "
                     f"page={page_number}; total={len(results)}",
                     flush=True,
                 )

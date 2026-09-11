@@ -293,6 +293,14 @@ class DiscoveryLead(db.Model):
         nullable=False,
         default="no_contact_found"
     )
+    is_short_term = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False
+    )
+    short_term_reason = db.Column(
+        db.String(255)
+    )
 
     source = db.Column(
         db.String(100)
@@ -376,6 +384,26 @@ def get_agents():
 
 
 # =========================================================
+# SHORT-TERM AGENCY CLASSIFICATION
+# =========================================================
+SHORT_TERM_INDICATORS = (
+    "holiday home", "vacation home", "short term", "short-term",
+    "short stay", "short-stay", "serviced apartment",
+    "monthly rental", "corporate housing",
+)
+
+
+def infer_short_term_classification(title, description, source, explicit=None, reason=None):
+    if explicit is not None:
+        return bool(explicit), str(reason or "").strip()
+    if str(source or "").strip().lower() != "property finder":
+        return False, ""
+    searchable = f"{title or ''} {description or ''}".lower()
+    matches = [value for value in SHORT_TERM_INDICATORS if value in searchable]
+    return bool(matches), ", ".join(dict.fromkeys(matches))
+
+
+# =========================================================
 # CREATE DISCOVERY LEAD
 # =========================================================
 
@@ -387,19 +415,18 @@ def create_discovery_lead(
     url,
     phone=None,
     score=None,
-    contact_status="no_contact_found"
+    contact_status="no_contact_found",
+    is_short_term=None,
+    short_term_reason=None,
+    short_term_priority=None
 ):
+    inferred_short_term, inferred_reason = infer_short_term_classification(
+        title, description, source, explicit=is_short_term, reason=short_term_reason
+    )
 
-    existing_lead = DiscoveryLead.query.filter_by(
-        url=url
-    ).first()
-
-
-    # Existing opportunity
+    existing_lead = DiscoveryLead.query.filter_by(url=url).first()
     if existing_lead:
-
         changed = False
-
         if phone and not existing_lead.phone:
             existing_lead.phone = phone
             existing_lead.contact_status = "phone_found"
@@ -407,50 +434,34 @@ def create_discovery_lead(
         elif contact_status and existing_lead.contact_status != contact_status:
             existing_lead.contact_status = contact_status
             changed = True
-
+        if inferred_short_term and not existing_lead.is_short_term:
+            existing_lead.is_short_term = True
+            changed = True
+        if inferred_reason and existing_lead.short_term_reason != inferred_reason:
+            existing_lead.short_term_reason = inferred_reason
+            changed = True
         if changed:
             db.session.commit()
-
         return existing_lead
 
-
-    # Calculate score if not provided
     if score is None:
-
-        score = calculate_score(
-            description or ""
-        )
-
+        score = calculate_score(description or "")
 
     discovery_lead = DiscoveryLead(
-
         title=title,
-
         description=description,
-
         city=city,
-
         phone=phone,
         contact_status=("phone_found" if phone else contact_status),
-
+        is_short_term=inferred_short_term,
+        short_term_reason=inferred_reason or None,
         source=source,
-
         url=url,
-
         score=score,
-
         found_at=datetime.utcnow()
-
     )
-
-
-    db.session.add(
-        discovery_lead
-    )
-
+    db.session.add(discovery_lead)
     db.session.commit()
-
-
     return discovery_lead
 
 
@@ -1461,11 +1472,18 @@ def discovery():
     if user.role == "agent":
         return redirect("/")
 
-    sort_by = request.args.get("sort", "phone_first").strip()
+    sort_by = request.args.get("sort", "short_term_first").strip()
     contact_filter = request.args.get("contact", "all").strip()
+    agency_type = request.args.get("agency_type", "all").strip()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
 
     query = DiscoveryLead.query
+    if agency_type == "short_term":
+        query = query.filter(DiscoveryLead.is_short_term.is_(True))
+    elif agency_type == "general":
+        query = query.filter(DiscoveryLead.is_short_term.is_(False))
+    else:
+        agency_type = "all"
 
     if contact_filter == "phone_found":
         query = query.filter(
@@ -1483,7 +1501,14 @@ def discovery():
     else:
         contact_filter = "all"
 
-    if sort_by == "newest":
+    if sort_by == "short_term_first":
+        query = query.order_by(
+            case((DiscoveryLead.is_short_term.is_(True), 0), else_=1).asc(),
+            case((db.and_(DiscoveryLead.phone.isnot(None), DiscoveryLead.phone != ""), 0), else_=1).asc(),
+            DiscoveryLead.score.desc(),
+            DiscoveryLead.found_at.desc()
+        )
+    elif sort_by == "newest":
         query = query.order_by(
             DiscoveryLead.found_at.desc(),
             DiscoveryLead.id.desc()
@@ -1527,6 +1552,7 @@ def discovery():
         total_opportunities=DiscoveryLead.query.count(),
         sort_by=sort_by,
         contact_filter=contact_filter,
+        agency_type=agency_type,
         current_user=user,
         scan_running=craigslist_scan_status["running"],
         last_scan_count=craigslist_scan_status["added"]
@@ -1922,6 +1948,38 @@ with app.app_context():
             )
 
             connection.commit()
+
+    # Add short-term classification fields if missing
+    if "is_short_term" not in discovery_lead_columns:
+        with db.engine.connect() as connection:
+            connection.execute(text(
+                "ALTER TABLE discovery_lead ADD COLUMN is_short_term BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+            connection.commit()
+
+    if "short_term_reason" not in discovery_lead_columns:
+        with db.engine.connect() as connection:
+            connection.execute(text(
+                "ALTER TABLE discovery_lead ADD COLUMN short_term_reason VARCHAR(255)"
+            ))
+            connection.commit()
+
+    # Backfill existing Property Finder agencies using strong name/description indicators.
+    with db.engine.connect() as connection:
+        connection.execute(text(
+            "UPDATE discovery_lead SET is_short_term = TRUE "
+            "WHERE LOWER(TRIM(COALESCE(source, ''))) = 'property finder' AND ("
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%holiday home%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%vacation home%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%short term%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%short-term%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%short stay%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%serviced apartment%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%monthly rental%' OR "
+            "LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '')) LIKE '%corporate housing%'"
+            ")"
+        ))
+        connection.commit()
 
     # =====================================================
     # CREATE DEFAULT USERS
