@@ -1,22 +1,23 @@
-"""Property Finder company source for Owner-CRM.
+"""Fast Property Finder company source for Owner-CRM.
 
 Drop-in API:
     scan(already_processed=None, on_result=None) -> list[dict]
 
-The source discovers UAE companies from /en/find-broker, keeps companies with
-rental inventory, opens each public company profile, reveals the public
-"Call Company" number, and emits every completed company immediately through
-on_result. A fresh Chromium process is used for each company.
+Uses requests + BeautifulSoup only. Company phone numbers are read directly
+from the public company profile link (data-testid="phone-btn" / tel: href).
 """
 import json
 import os
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 BASE_URL = "https://www.propertyfinder.ae"
 DIRECTORY_URL = os.getenv(
@@ -26,20 +27,45 @@ DIRECTORY_URL = os.getenv(
 MAX_ADS = int(os.getenv("SCRAPER_MAX_ADS", "30"))
 MAX_PAGES = int(os.getenv("PROPERTYFINDER_MAX_PAGES", "10"))
 REQUEST_TIMEOUT = int(os.getenv("SCRAPER_TIMEOUT", "30"))
-PAGE_TIMEOUT = int(os.getenv("PROPERTYFINDER_PAGE_TIMEOUT", "30000"))
-PHONE_TIMEOUT = int(os.getenv("PROPERTYFINDER_PHONE_TIMEOUT", "7000"))
-DELAY = float(os.getenv("SCRAPER_DELAY", "1.0"))
+DELAY = float(os.getenv("SCRAPER_DELAY", "0.2"))
 MIN_RENTALS = int(os.getenv("PROPERTYFINDER_MIN_RENTALS", "1"))
+WORKERS = max(1, min(int(os.getenv("PROPERTYFINDER_WORKERS", "5")), 10))
+RETRIES = max(0, int(os.getenv("PROPERTYFINDER_RETRIES", "2")))
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36"
-    )
+    ),
+    "Accept-Language": "en-AE,en;q=0.9",
 }
 BROKER_PATH_RE = re.compile(r"/en/broker/[a-z0-9-]+(?:-\d+){1,2}/?", re.I)
-UAE_PHONE_RE = re.compile(
-    r"(?<!\d)(?:\+?971|00971|0)[\s()-]*\d(?:[\s()-]*\d){7,9}(?!\d)"
-)
+_thread_local = threading.local()
+
+
+def build_session():
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    retry = Retry(
+        total=RETRIES,
+        connect=RETRIES,
+        read=RETRIES,
+        status=RETRIES,
+        backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(("GET",)),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=WORKERS, pool_maxsize=WORKERS)
+    session.mount("https://", adapter)
+    return session
+
+
+def worker_session():
+    session = getattr(_thread_local, "session", None)
+    if session is None:
+        session = build_session()
+        _thread_local.session = session
+    return session
 
 
 def normalize_phone(raw):
@@ -48,16 +74,8 @@ def normalize_phone(raw):
         digits = digits[2:]
     elif digits.startswith("0") and len(digits) in (9, 10):
         digits = "971" + digits[1:]
-    if digits.startswith("971") and 11 <= len(digits) <= 12:
+    if digits.startswith("971") and len(digits) in (11, 12):
         return "+" + digits
-    return None
-
-
-def extract_phone(text):
-    for match in UAE_PHONE_RE.finditer(text or ""):
-        phone = normalize_phone(match.group(0))
-        if phone:
-            return phone
     return None
 
 
@@ -97,6 +115,8 @@ def parse_int(value):
 
 
 def first(data, *keys, default=None):
+    if not isinstance(data, dict):
+        return default
     for key in keys:
         value = data.get(key)
         if value not in (None, "", [], {}):
@@ -137,8 +157,8 @@ def collect_companies(session, already_processed, target):
                         card_text = candidate
                         break
 
-            rent_match = re.search(r"for\s+rent\s*:?\s*([\d,]+)", card_text, re.I)
-            rentals = parse_int(rent_match.group(1)) if rent_match else 0
+            match = re.search(r"for\s+rent\s*:?\s*([\d,]+)", card_text, re.I)
+            rentals = parse_int(match.group(1)) if match else 0
             if rentals < MIN_RENTALS:
                 continue
 
@@ -154,15 +174,37 @@ def collect_companies(session, already_processed, target):
         )
         if page_added == 0:
             break
-        time.sleep(DELAY)
+        if DELAY:
+            time.sleep(DELAY)
 
     return companies
 
 
-def parse_company_profile(session, company):
+def extract_company_phone(soup):
+    phone_link = (
+        soup.find("a", attrs={"data-testid": "phone-btn"})
+        or soup.find("a", attrs={"data-qa": "phone-button"})
+    )
+    if phone_link:
+        phone = normalize_phone(phone_link.get("href"))
+        if phone:
+            return phone
+
+    for link in soup.find_all("a", href=True):
+        href = link.get("href", "")
+        if href.lower().startswith("tel:"):
+            phone = normalize_phone(href)
+            if phone:
+                return phone
+    return None
+
+
+def parse_company_profile(company):
+    session = worker_session()
     response = session.get(company["url"], timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
+    phone = extract_company_phone(soup)
     page_props = json_script(soup, "__NEXT_DATA__").get("props", {}).get("pageProps", {})
 
     required = {"orn", "licenseNumber", "address", "activeListings", "agentsCount", "superAgentsCount"}
@@ -226,85 +268,8 @@ def parse_company_profile(session, company):
         "orn": str(orn or ""),
         "address": str(address or ""),
         "about": " ".join(str(description or "").split())[:1500],
+        "phone": phone,
     }
-
-
-def reveal_company_phone(playwright, url, company_name):
-    browser = context = page = None
-    try:
-        print(f"Launching fresh Chromium for: {company_name}", flush=True)
-        browser = playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
-                "--disable-extensions", "--disable-sync", "--no-first-run",
-                "--mute-audio",
-            ],
-        )
-        context = browser.new_context(
-            user_agent=HEADERS["User-Agent"],
-            locale="en-AE",
-            service_workers="block",
-            java_script_enabled=True,
-            viewport={"width": 1280, "height": 720},
-        )
-        page = context.new_page()
-        page.set_default_timeout(PAGE_TIMEOUT)
-        cdp = context.new_cdp_session(page)
-        cdp.send("Network.enable")
-        cdp.send("Network.setBlockedURLs", {"urls": [
-            "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.svg",
-            "*.woff", "*.woff2", "*.ttf", "*.mp4", "*.webm",
-        ]})
-
-        print(f"Navigating Chromium to: {url}", flush=True)
-        page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
-        print(f"Chromium loaded company page: {page.url}", flush=True)
-
-        button = page.get_by_text(re.compile(r"^\s*Call Company\s*$", re.I)).first
-        button.wait_for(state="visible", timeout=PAGE_TIMEOUT)
-        print(f"Call Company button visible for: {company_name}", flush=True)
-
-        try:
-            button.click(timeout=5000, no_wait_after=True)
-        except Exception:
-            button.evaluate("element => element.click()")
-
-        deadline = time.monotonic() + PHONE_TIMEOUT / 1000
-        while time.monotonic() < deadline:
-            for locator in (
-                page.locator('a[href^="tel:"]').first,
-                page.get_by_text(UAE_PHONE_RE).first,
-            ):
-                try:
-                    if locator.count():
-                        raw = locator.get_attribute("href") or locator.inner_text(timeout=1000)
-                        phone = normalize_phone(raw)
-                        if phone:
-                            print(f"Company phone found for {company_name}: {phone}", flush=True)
-                            return phone
-                except Exception:
-                    pass
-
-            phone = extract_phone(page.locator("body").inner_text(timeout=2000))
-            if phone:
-                print(f"Company phone found for {company_name}: {phone}", flush=True)
-                return phone
-            page.wait_for_timeout(250)
-
-    except PlaywrightTimeoutError:
-        print(f"Call Company timed out for {company_name}", flush=True)
-    except Exception as exc:
-        print(f"Call Company failed for {company_name}: {exc}", flush=True)
-    finally:
-        for obj in (page, context, browser):
-            if obj is not None:
-                try:
-                    obj.close()
-                except Exception:
-                    pass
-        print(f"Chromium closed for: {company_name}", flush=True)
-    return None
 
 
 def make_description(company):
@@ -324,52 +289,55 @@ def make_description(company):
     return " | ".join(parts)
 
 
+def to_result(company):
+    phone = company.get("phone")
+    return {
+        "title": company["title"],
+        "description": make_description(company),
+        "city": company["city"],
+        "source": "Property Finder",
+        "url": company["url"],
+        "posted_at": None,
+        "phone": phone,
+        "contact_status": "phone_found" if phone else "no_contact_found",
+    }
+
+
 def scan(already_processed=None, on_result=None):
-    session = requests.Session()
-    session.headers.update(HEADERS)
+    directory_session = build_session()
     results = []
-
     try:
-        candidates = collect_companies(session, already_processed, MAX_ADS * 3)
-        print(f"Collected {len(candidates)} Property Finder company profiles", flush=True)
+        candidates = collect_companies(directory_session, already_processed, MAX_ADS * 3)
+        print(
+            f"Collected {len(candidates)} Property Finder company profiles; workers={WORKERS}",
+            flush=True,
+        )
 
-        with sync_playwright() as playwright:
-            for candidate in candidates:
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+            futures = {executor.submit(parse_company_profile, candidate): candidate for candidate in candidates}
+            for future in as_completed(futures):
+                candidate = futures[future]
                 if len(results) >= MAX_ADS:
                     break
-
-                print(f"Processing company candidate: {candidate['url']}", flush=True)
                 try:
-                    company = parse_company_profile(session, candidate)
-                    print(f"Company profile parsed: {company['title']}", flush=True)
-                    phone = reveal_company_phone(
-                        playwright, company["url"], company["title"]
-                    )
-                    result = {
-                        "title": company["title"],
-                        "description": make_description(company),
-                        "city": company["city"],
-                        "source": "Property Finder",
-                        "url": company["url"],
-                        "posted_at": None,
-                        "phone": phone,
-                        "contact_status": "phone_found" if phone else "no_contact_found",
-                    }
-
-                    # Save immediately before moving to the next company.
+                    company = future.result()
+                    result = to_result(company)
                     if on_result is not None:
                         on_result(result)
                     results.append(result)
                     print(
-                        f"Completed company: {company['title']}; "
-                        f"phone={'yes' if phone else 'no'}; total={len(results)}",
+                        f"Completed company: {result['title']}; "
+                        f"phone={'yes' if result['phone'] else 'no'}; total={len(results)}",
                         flush=True,
                     )
                 except (requests.RequestException, ValueError, json.JSONDecodeError) as exc:
                     print(f"Skip {candidate['url']}: {exc}", flush=True)
-                time.sleep(DELAY)
+
+            for future in futures:
+                if not future.done():
+                    future.cancel()
     finally:
-        session.close()
+        directory_session.close()
 
     print(
         f"Property Finder scan completed: companies={len(results)}; "
