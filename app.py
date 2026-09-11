@@ -327,6 +327,16 @@ class DiscoveryLead(db.Model):
 
 
 # =========================================================
+# SCRAPER STATE MODEL
+# =========================================================
+class ScraperState(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(100), unique=True, nullable=False)
+    next_page = db.Column(db.Integer, nullable=False, default=1)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+# =========================================================
 # HELPER FUNCTIONS
 # =========================================================
 
@@ -1624,14 +1634,36 @@ def run_craigslist_background():
                     craigslist_scan_status["added"],
                     flush=True
                 )
+            scraper_state = ScraperState.query.filter_by(source="propertyfinder").first()
+            if scraper_state is None:
+                scraper_state = ScraperState(
+                    source="propertyfinder",
+                    next_page=1,
+                    updated_at=datetime.utcnow()
+                )
+                db.session.add(scraper_state)
+                db.session.commit()
 
+            start_page = max(1, scraper_state.next_page or 1)
+            print(
+                f"Property Finder persistent cursor: starting at page {start_page}",
+                flush=True
+            )
+
+            def save_page_cursor(next_page):
+                scraper_state.next_page = max(1, int(next_page or 1))
+                scraper_state.updated_at = datetime.utcnow()
+                db.session.commit()
+                print(
+                    f"Property Finder persistent cursor saved: next page {scraper_state.next_page}",
+                    flush=True
+                )
 
             ads = discovery_engine.scan(
-
                 already_processed=already_processed,
-
-                on_result=save_incrementally
-
+                on_result=save_incrementally,
+                start_page=start_page,
+                on_page_complete=save_page_cursor
             )
 
 

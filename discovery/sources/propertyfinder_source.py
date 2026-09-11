@@ -246,43 +246,52 @@ def broker_to_result(broker):
     }
 
 
-def scan(already_processed=None, on_result=None):
+def scan(
+    already_processed=None,
+    on_result=None,
+    start_page=1,
+    on_page_complete=None
+):
     processed_set = set() if callable(already_processed) else set(already_processed or ())
     is_processed = (
         already_processed
         if callable(already_processed)
         else lambda url: url in processed_set
     )
-
     session = build_session()
     results = []
     seen = set()
-    reported_total_pages = None
+    page_number = max(1, int(start_page or 1))
+    pages_scanned = 0
+    total_pages = None
+
+    print(
+        f"Property Finder scan starting at page {page_number}; "
+        f"page budget={MAX_PAGES}; max ads={MAX_ADS}",
+        flush=True,
+    )
 
     try:
-        page_number = 1
-        while page_number <= MAX_PAGES and len(results) < MAX_ADS:
+        while pages_scanned < MAX_PAGES and len(results) < MAX_ADS:
             response = session.get(page_url(page_number), timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             container = broker_container(next_data(soup))
             brokers = container.get("data", [])
             meta = container.get("meta", {}) if isinstance(container.get("meta"), dict) else {}
+            total_pages = parse_int(meta.get("totalPages")) or total_pages or 198
 
-            if reported_total_pages is None:
-                reported_total_pages = parse_int(meta.get("totalPages")) or MAX_PAGES
-            effective_last_page = min(MAX_PAGES, reported_total_pages)
-
+            if page_number > total_pages:
+                page_number = 1
+                continue
             if not brokers:
-                print(
-                    f"Property Finder page {page_number}: no broker records; stopping",
-                    flush=True,
-                )
+                print(f"Property Finder page {page_number}: no broker records; stopping", flush=True)
                 break
 
             page_new = 0
             page_rental = 0
             page_duplicate = 0
+            completed_whole_page = True
 
             for broker in brokers:
                 url = broker_url(broker)
@@ -292,17 +301,14 @@ def scan(already_processed=None, on_result=None):
                     page_duplicate += 1
                     continue
                 seen.add(url)
-
                 result = broker_to_result(broker)
                 if result is None:
                     continue
                 page_rental += 1
-
                 if on_result is not None:
                     on_result(result)
                 results.append(result)
                 page_new += 1
-
                 print(
                     f"Completed company: {result['title']}; "
                     f"phone={'yes' if result['phone'] else 'no'}; "
@@ -311,18 +317,30 @@ def scan(already_processed=None, on_result=None):
                     flush=True,
                 )
                 if len(results) >= MAX_ADS:
+                    completed_whole_page = False
                     break
 
+            pages_scanned += 1
             print(
-                f"Property Finder page {page_number}/{effective_last_page}: "
+                f"Property Finder page {page_number}/{total_pages}: "
                 f"profiles={len(brokers)}; rental={page_rental}; "
-                f"duplicates={page_duplicate}; added={page_new}",
+                f"duplicates={page_duplicate}; added={page_new}; "
+                f"run_pages={pages_scanned}/{MAX_PAGES}",
                 flush=True,
             )
 
-            if page_number >= effective_last_page:
+            if not completed_whole_page:
+                # Resume this same page next time so remaining companies are not skipped.
+                if on_page_complete is not None:
+                    on_page_complete(page_number)
                 break
-            page_number += 1
+
+            next_page = page_number + 1
+            if next_page > total_pages:
+                next_page = 1
+            if on_page_complete is not None:
+                on_page_complete(next_page)
+            page_number = next_page
             if DELAY:
                 time.sleep(DELAY)
     finally:
@@ -330,7 +348,8 @@ def scan(already_processed=None, on_result=None):
 
     print(
         f"Property Finder scan completed: companies={len(results)}; "
-        f"phones={sum(bool(item.get('phone')) for item in results)}",
+        f"phones={sum(bool(item.get('phone')) for item in results)}; "
+        f"next_start_page={page_number}",
         flush=True,
     )
     return results

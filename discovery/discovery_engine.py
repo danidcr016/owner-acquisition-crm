@@ -6,11 +6,17 @@ from discovery.sources import test_source, propertyfinder_source
 # SCAN
 # =========================================================
 
-def scan(already_processed=None, on_result=None):
-
+def scan(
+    already_processed=None,
+    on_result=None,
+    start_page=1,
+    on_page_complete=None
+):
     return propertyfinder_source.scan(
         already_processed=already_processed,
-        on_result=on_result
+        on_result=on_result,
+        start_page=start_page,
+        on_page_complete=on_page_complete
     )
 
 
@@ -57,7 +63,12 @@ def analyze(ad):
 
         "phone": ad.get(
             "phone"
-        )
+        ),
+
+        "contact_status": ad.get("contact_status", "no_contact_found"),
+        "is_short_term": ad.get("is_short_term"),
+        "short_term_reason": ad.get("short_term_reason"),
+        "short_term_priority": ad.get("short_term_priority")
 
     }
 
@@ -115,7 +126,11 @@ def process_ads(
                 "phone"
             ),
 
-            score=scored_ad["score"]
+            score=scored_ad["score"],
+            contact_status=scored_ad.get("contact_status", "no_contact_found"),
+            is_short_term=scored_ad.get("is_short_term"),
+            short_term_reason=scored_ad.get("short_term_reason"),
+            short_term_priority=scored_ad.get("short_term_priority")
 
         )
 
