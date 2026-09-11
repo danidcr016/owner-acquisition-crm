@@ -2065,31 +2065,6 @@ with app.app_context():
 
     db.session.commit()
 
-    # Temporary admin password reset from Render environment
-    reset_admin_password = os.environ.get("RESET_ADMIN_PASSWORD")
-
-    if reset_admin_password:
-        admin_user = User.query.filter_by(
-            username="jeremy"
-        ).first()
-
-        if admin_user:
-            admin_user.password_hash = generate_password_hash(
-                reset_admin_password
-            )
-            admin_user.role = "admin"
-            db.session.commit()
-
-            print(
-                "[setup] Password for 'jeremy' was reset successfully.",
-                flush=True
-            )
-        else:
-            print(
-                "[setup] User 'jeremy' was not found.",
-                flush=True
-            )
-
 
 # =========================================================
 # RUN
