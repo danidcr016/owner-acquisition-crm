@@ -1,0 +1,308 @@
+{
+  "results": [
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?page=2",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?page=2",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-dubai-l3-11383-11254",
+        "https://www.propertyfinder.ae/en/broker/cbb-properties-llc-5442-5316",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-al-furjan-9782-9656",
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-dubai-s08-12795-12666",
+        "https://www.propertyfinder.ae/en/broker/metropolitan-premium-properties-918-817",
+        "https://www.propertyfinder.ae/en/broker/dacha-real-estate-624-533",
+        "https://www.propertyfinder.ae/en/broker/driven-properties-948-847",
+        "https://www.propertyfinder.ae/en/broker/treo-homes-2761-2635",
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-dubai-s11-v2-13228-13228",
+        "https://www.propertyfinder.ae/en/broker/whitewill-real-estate-brokers-l-l-c-5120-4994",
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-dubai-s06-12793-12664",
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-dubai-s03-12818-12689",
+        "https://www.propertyfinder.ae/en/broker/white-co-real-estate-4372-4246",
+        "https://www.propertyfinder.ae/en/broker/savills-dubai-149-77",
+        "https://www.propertyfinder.ae/en/broker/haus-haus-1161-1060",
+        "https://www.propertyfinder.ae/en/broker/better-homes-dubai-marina-2591-2463",
+        "https://www.propertyfinder.ae/en/broker/engel-volkers-secondary-sales-2-12798-12669",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-property-management-4199-4073",
+        "https://www.propertyfinder.ae/en/broker/driven-properties-abu-dhabi-branch-10444-10318",
+        "https://www.propertyfinder.ae/en/broker/strada-5188-5062"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 2,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?page=3",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?page=3",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/better-homes-motor-city-3686-3560",
+        "https://www.propertyfinder.ae/en/broker/fam-living-4613-4487",
+        "https://www.propertyfinder.ae/en/broker/huspy-dubai-7163-7037",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-13-4902-4776",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-17-6646-6520",
+        "https://www.propertyfinder.ae/en/broker/luxfolio-real-estate-brokers-llc-3766-3640",
+        "https://www.propertyfinder.ae/en/broker/hamptons-international-leasing-8013-7887",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-dubai-south-9617-9491",
+        "https://www.propertyfinder.ae/en/broker/famluxe-branch-23-8258-8132",
+        "https://www.propertyfinder.ae/en/broker/lindas-real-estate-4214-4088",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-29-12571-12442",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-6-4198-4072",
+        "https://www.propertyfinder.ae/en/broker/equity-real-estates-l-l-c-9338-9212",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-27-12564-12435",
+        "https://www.propertyfinder.ae/en/broker/allsopp-allsopp-motor-city-5520-5394",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-2-4196-4070",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-3-4200-4074",
+        "https://www.propertyfinder.ae/en/broker/better-homes-local-division-12287-12158",
+        "https://www.propertyfinder.ae/en/broker/fam-properties-branch-11-4646-4520",
+        "https://www.propertyfinder.ae/en/broker/espace-real-estate-524-436"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 3,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?page_number=2",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?page_number=2",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?pageNumber=2",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?pageNumber=2",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?offset=20",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?offset=20",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?start=20",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?start=20",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    },
+    {
+      "requested": "https://www.propertyfinder.ae/en/find-broker/search?from=20",
+      "final": "https://www.propertyfinder.ae/en/find-broker/search?from=20",
+      "status": 200,
+      "html_brokers": 20,
+      "json_brokers": 20,
+      "broker_urls": [
+        "https://www.propertyfinder.ae/en/broker/elite-property-brokerage-4428-4302",
+        "https://www.propertyfinder.ae/en/broker/arabian-estates-4464-4338",
+        "https://www.propertyfinder.ae/en/broker/mccone-properties-1012-911",
+        "https://www.propertyfinder.ae/en/broker/provident-real-estate-336-260",
+        "https://www.propertyfinder.ae/en/broker/aqua-properties-675-571",
+        "https://www.propertyfinder.ae/en/broker/i-m-a-r-a-real-estate-l-l-c-v2-13079-13079",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-llc-rak-7147-7021",
+        "https://www.propertyfinder.ae/en/broker/paragon-properties-5046-4920",
+        "https://www.propertyfinder.ae/en/broker/city-edge-5823-5697",
+        "https://www.propertyfinder.ae/en/broker/provident-business-bay-branch-v2-12949-12949",
+        "https://www.propertyfinder.ae/en/broker/mccone-living-holiday-homes-rental-l-l-c-5337-5211",
+        "https://www.propertyfinder.ae/en/broker/mccone-northern-estates-fz-llc-7185-7059",
+        "https://www.propertyfinder.ae/en/broker/p-v-h-vacation-homes-l-l-c-11220-11094",
+        "https://www.propertyfinder.ae/en/broker/locations-holiday-homes-v2-180613-180613",
+        "https://www.propertyfinder.ae/en/broker/al-mirax-real-estate-brokers-7114-6988",
+        "https://www.propertyfinder.ae/en/broker/better-homes-central-listing-5476-5350",
+        "https://www.propertyfinder.ae/en/broker/fam-real-estate-broker-branch-33-royals-v2-12867-12867",
+        "https://www.propertyfinder.ae/en/broker/f-a-m-real-estate-broker-l-l-c-10635-10509",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-1438-1339",
+        "https://www.propertyfinder.ae/en/broker/banke-international-properties-dubai-creek-harbour-9788-9662"
+      ],
+      "container_path": "root.props.pageProps.brokers",
+      "metadata": {
+        "meta": {
+          "total": 3953,
+          "totalPages": 198,
+          "page": 1,
+          "perPage": 20
+        }
+      }
+    }
+  ]
+}

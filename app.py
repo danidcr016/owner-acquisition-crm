@@ -1734,6 +1734,52 @@ def delete_discovery_without_phone():
 
 
 # =========================================================
+# DELETE ALL NON-PROPERTY FINDER DISCOVERY LEADS
+# =========================================================
+@app.route("/discovery/delete-non-property-finder", methods=["POST"])
+def delete_non_property_finder_discovery_leads():
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    if craigslist_scan_status["running"]:
+        return redirect(
+            "/discovery?sort=newest&contact=all&delete_error=scan_running"
+        )
+
+    try:
+        deleted_count = DiscoveryLead.query.filter(
+            db.or_(
+                DiscoveryLead.source.is_(None),
+                db.func.trim(DiscoveryLead.source) == "",
+                db.func.lower(db.func.trim(DiscoveryLead.source))
+                != "property finder"
+            )
+        ).delete(synchronize_session=False)
+        db.session.commit()
+        print(
+            f"Deleted {deleted_count} non-Property Finder discovery leads",
+            flush=True
+        )
+        return redirect(
+            "/discovery?sort=newest&contact=all&deleted_non_pf="
+            f"{deleted_count}"
+        )
+    except Exception as exc:
+        db.session.rollback()
+        print(
+            "Failed to delete non-Property Finder discovery leads:",
+            repr(exc),
+            flush=True
+        )
+        return redirect(
+            "/discovery?sort=newest&contact=all&delete_error=database"
+        )
+
+
+# =========================================================
 # RUN CRAIGSLIST SCAN
 # =========================================================
 
