@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 import threading
 
@@ -1697,6 +1698,97 @@ def craigslist_status():
 
     return jsonify(
         craigslist_scan_status
+    )
+
+
+# =========================================================
+# CONVERT DISCOVERY OPPORTUNITY TO LEAD
+# =========================================================
+@app.route(
+    "/discovery/add-to-leads/<int:id>",
+    methods=["POST"]
+)
+def add_discovery_to_leads(id):
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    discovery_lead = DiscoveryLead.query.get_or_404(id)
+    phone = str(discovery_lead.phone or "").strip()
+    name = str(discovery_lead.title or "").strip()
+    source = str(discovery_lead.source or "Property Finder").strip()
+    description = str(discovery_lead.description or "").strip()
+
+    email_match = re.search(
+        r"(?:^|\|)\s*Email:\s*([^|\s]+@[^|\s]+)",
+        description,
+        re.I
+    )
+    email = email_match.group(1).strip() if email_match else ""
+
+    existing_lead = None
+    if phone:
+        existing_lead = Lead.query.filter(
+            db.func.trim(Lead.phone) == phone
+        ).first()
+
+    if existing_lead is None and name:
+        existing_lead = Lead.query.filter(
+            db.func.lower(db.func.trim(Lead.name)) == name.lower(),
+            db.func.lower(db.func.trim(Lead.source)) == source.lower()
+        ).first()
+
+    if existing_lead:
+        return redirect(
+            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+            f"lead_result=exists&lead_name={discovery_lead.id}"
+        )
+
+    notes_parts = []
+    if description:
+        notes_parts.append(description)
+    if discovery_lead.url:
+        notes_parts.append(f"Property Finder URL: {discovery_lead.url}")
+    if discovery_lead.is_short_term:
+        reason = discovery_lead.short_term_reason or "Short-term indicator found"
+        notes_parts.append(f"Short-term priority: {reason}")
+
+    lead = Lead(
+        name=name or "Property Finder agency",
+        phone=phone,
+        email=email,
+        city=str(discovery_lead.city or "UAE").strip(),
+        source=source,
+        status="NEW",
+        notes="\n\n".join(notes_parts),
+        assigned_to=None,
+        created_at=datetime.utcnow()
+    )
+
+    try:
+        db.session.add(lead)
+        db.session.commit()
+        print(
+            f"Discovery opportunity added to Leads: {lead.name} (lead_id={lead.id})",
+            flush=True
+        )
+    except Exception as exc:
+        db.session.rollback()
+        print(
+            "Failed to add Discovery opportunity to Leads:",
+            repr(exc),
+            flush=True
+        )
+        return redirect(
+            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+            "lead_result=error"
+        )
+
+    return redirect(
+        "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+        f"lead_result=added&lead_name={discovery_lead.id}"
     )
 
 
