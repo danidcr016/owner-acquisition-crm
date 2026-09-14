@@ -10,8 +10,8 @@
                 <p class="text-muted mb-0">Gestiona propietarios, conversaciones y próximos pasos desde un único lugar.</p>
             </div>
             <div class="text-lg-end rounded-3 px-3 py-2" style="background:rgba(255,255,255,.08)">
-                <small class="d-block opacity-75"><i class="bi bi-clock me-1"></i>San Diego Time</small>
-                <h4 id="sanDiegoClock" class="mb-0 text-white">--</h4>
+                <small class="d-block opacity-75"><i class="bi bi-clock me-1"></i>UAE Time</small>
+                <h4 id="uaeClock" class="mb-0 text-white">--</h4>
             </div>
         </div>
         <div class="dashboard-actions mt-4">
@@ -39,6 +39,17 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function updateSanDiegoClock(){const time=new Date().toLocaleTimeString("en-US",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit",second:"2-digit"});document.getElementById("sanDiegoClock").textContent=time}updateSanDiegoClock();setInterval(updateSanDiegoClock,1000);
+function updateUaeClock(){
+    const time = new Date().toLocaleTimeString("en-US", {
+        timeZone: "Asia/Dubai",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+    });
+    document.getElementById("uaeClock").textContent = time;
+}
+updateUaeClock();
+setInterval(updateUaeClock, 1000);
 </script>
 {% endblock %}
