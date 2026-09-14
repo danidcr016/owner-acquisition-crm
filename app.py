@@ -1483,12 +1483,18 @@ def discovery():
     if user.role == "agent":
         return redirect("/")
 
+    search = request.args.get("search", "").strip()
     sort_by = request.args.get("sort", "short_term_first").strip()
     contact_filter = request.args.get("contact", "all").strip()
     agency_type = request.args.get("agency_type", "all").strip()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
 
     query = DiscoveryLead.query
+
+    if search:
+        query = query.filter(
+            DiscoveryLead.title.ilike(f"%{search}%")
+        )
     if agency_type == "short_term":
         query = query.filter(DiscoveryLead.is_short_term.is_(True))
     elif agency_type == "general":
@@ -1561,6 +1567,7 @@ def discovery():
         opportunities=pagination.items,
         pagination=pagination,
         total_opportunities=DiscoveryLead.query.count(),
+        search=search,
         sort_by=sort_by,
         contact_filter=contact_filter,
         agency_type=agency_type,
