@@ -383,16 +383,15 @@ def can_access_lead(lead):
 
 
 def get_agents():
-
     return User.query.filter(
         User.role.in_([
             "agent",
-            "admin"
+            "admin",
+            "developer"
         ])
     ).order_by(
         User.username.asc()
     ).all()
-
 
 # =========================================================
 # SHORT-TERM AGENCY CLASSIFICATION
@@ -574,6 +573,9 @@ def login():
 
             session["role"] = user.role
 
+            if user.role == "agent":
+                return redirect("/leads")
+
             return redirect("/")
 
 
@@ -609,6 +611,10 @@ def home():
 
     if not session.get("logged_in"):
         return redirect("/login")
+
+
+    if user.role == "agent":
+        return redirect("/leads")
 
 
     user = current_user()
@@ -699,6 +705,10 @@ def add_lead():
         return redirect("/login")
 
 
+    if user.role == "agent":
+        return "Access denied", 403
+
+
     user = current_user()
 
 
@@ -727,7 +737,8 @@ def add_lead():
                     User.id == int(assigned_to),
                     User.role.in_([
                         "agent",
-                        "admin"
+                        "admin",
+                        "developer"
                     ])
                 ).first()
 
@@ -1004,6 +1015,10 @@ def edit_lead(id):
         return redirect("/login")
 
 
+    if user.role == "agent":
+        return "Access denied", 403
+
+
     user = current_user()
 
 
@@ -1055,7 +1070,8 @@ def edit_lead(id):
                     User.id == int(assigned_to),
                     User.role.in_([
                         "agent",
-                        "admin"
+                        "admin",
+                        "developer"
                     ])
                 ).first()
 
@@ -1113,6 +1129,9 @@ def follow_ups():
     if not session.get("logged_in"):
         return redirect("/login")
 
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
 
     user = current_user()
 
@@ -1167,6 +1186,9 @@ def add_follow_up():
 
     if not session.get("logged_in"):
         return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
 
 
     user = current_user()
@@ -1269,6 +1291,9 @@ def edit_follow_up(id):
 
     if not session.get("logged_in"):
         return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
 
 
     user = current_user()
@@ -1380,6 +1405,9 @@ def complete_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
 
     follow_up = FollowUp.query.get_or_404(
         id
@@ -1413,6 +1441,9 @@ def reopen_follow_up(id):
 
     if not session.get("logged_in"):
         return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
 
 
     follow_up = FollowUp.query.get_or_404(
@@ -1572,6 +1603,7 @@ def discovery():
         contact_filter=contact_filter,
         agency_type=agency_type,
         current_user=user,
+        agents=get_agents(),
         scan_running=craigslist_scan_status["running"],
         last_scan_count=craigslist_scan_status["added"]
     )
@@ -1755,6 +1787,25 @@ def add_discovery_to_leads(id):
         return "Access denied", 403
 
     discovery_lead = DiscoveryLead.query.get_or_404(id)
+
+    assigned_to_raw = str(request.form.get("assigned_to") or "").strip()
+
+    if not assigned_to_raw.isdigit():
+        return redirect(
+            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+            "lead_result=assignment_required"
+        )
+
+    assigned_user = User.query.filter(
+        User.id == int(assigned_to_raw),
+        User.role.in_(["agent", "admin", "developer"])
+    ).first()
+
+    if not assigned_user:
+        return redirect(
+            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+            "lead_result=invalid_assignment"
+        )
     phone = str(discovery_lead.phone or "").strip()
     name = str(discovery_lead.title or "").strip()
     source = str(discovery_lead.source or "Property Finder").strip()
@@ -1802,7 +1853,7 @@ def add_discovery_to_leads(id):
         source=source,
         status="NEW",
         notes="\n\n".join(notes_parts),
-        assigned_to=None,
+        assigned_to=assigned_user.id,
         created_at=datetime.utcnow()
     )
 
@@ -1810,7 +1861,8 @@ def add_discovery_to_leads(id):
         db.session.add(lead)
         db.session.commit()
         print(
-            f"Discovery opportunity added to Leads: {lead.name} (lead_id={lead.id})",
+            f"Discovery opportunity added to Leads: {lead.name} "
+            f"(lead_id={lead.id}, assigned_to={assigned_user.username})",
             flush=True
         )
     except Exception as exc:
