@@ -2196,43 +2196,6 @@ with app.app_context():
 
     db.session.commit()
 
-
-
-    # =====================================================
-    # TEMPORARY AGENT PASSWORD RESET
-    # =====================================================
-
-    reset_agent_password = os.environ.get(
-        "RESET_AGENT_PASSWORD"
-    )
-
-    if reset_agent_password:
-
-        agent_user = User.query.filter_by(
-            username="agent"
-        ).first()
-
-        if agent_user:
-
-            agent_user.password_hash = generate_password_hash(
-                reset_agent_password
-            )
-
-            agent_user.role = "agent"
-            db.session.commit()
-
-            print(
-                "[setup] Password for 'agent' was reset successfully.",
-                flush=True
-            )
-
-        else:
-
-            print(
-                "[setup] User 'agent' was not found.",
-                flush=True
-            )
-
 # =========================================================
 # RUN
 # =========================================================
