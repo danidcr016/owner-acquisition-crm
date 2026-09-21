@@ -26,10 +26,10 @@ Leads - Owner Acquisition CRM
         {% endif %}
     </div>
 </div>
-{% if request.args.get("return_result") == "success" %}
+{% if request.args.get("delete_result") == "success" %}
 <div class="alert alert-success alert-dismissible fade show" role="alert">
-    <i class="bi bi-arrow-return-left"></i>
-    The lead was returned to Discovery and removed from View Leads.
+    <i class="bi bi-trash-fill"></i>
+    The lead and its follow-ups were deleted successfully.
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 {% endif %}
@@ -496,36 +496,24 @@ Leads - Owner Acquisition CRM
 
 
                                 {% endif %}
-                                <!-- RETURN TO DISCOVERY -->
-                                {% if current_user.role in ["admin", "developer"] %}
-                                <form
-                                    action="/return-lead-to-discovery/{{ lead.id }}"
-                                    method="POST"
-                                    class="d-inline"
-                                    onsubmit="return confirm('Return this lead to Discovery? It will be removed from View Leads.');"
-                                >
-                                    <button
-                                        type="submit"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        title="Return to Discovery"
-                                    >
-                                        <i class="bi bi-arrow-return-left"></i>
-                                    </button>
-                                </form>
-                                {% endif %}
-
                                 <!-- DELETE -->
 
                                 {% if current_user.role in ["admin", "developer"] %}
 
-                                <a
-                                    href="/delete-lead/{{ lead.id }}"
-                                    class="btn btn-sm btn-danger"
-                                    title="Delete lead"
-                                    onclick="return confirm('Are you sure you want to delete this lead?');"
+                                <form
+                                    action="/delete-lead/{{ lead.id }}"
+                                    method="POST"
+                                    class="d-inline"
+                                    onsubmit="return confirm('Are you sure you want to permanently delete this lead and its follow-ups?');"
                                 >
-                                    <i class="bi bi-trash-fill"></i>
-                                </a>
+                                    <button
+                                        type="submit"
+                                        class="btn btn-sm btn-danger"
+                                        title="Delete lead"
+                                    >
+                                        <i class="bi bi-trash-fill"></i>
+                                    </button>
+                                </form>
 
                                 {% endif %}
 
