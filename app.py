@@ -727,11 +727,6 @@ def add_lead():
         return redirect("/login")
 
 
-    if user.role == "agent":
-
-        return "Access denied", 403
-
-
     if request.method == "POST":
 
         if user.role in [
@@ -991,8 +986,7 @@ def update_status(id):
 # =========================================================
 
 @app.route(
-    "/delete-lead/<int:id>",
-    methods=["POST"]
+    "/delete-lead/<int:id>"
 )
 def delete_lead(id):
 
@@ -1007,20 +1001,12 @@ def delete_lead(id):
 
     lead = Lead.query.get_or_404(id)
 
-
-    FollowUp.query.filter_by(
-        lead_id=lead.id
-    ).delete(
-        synchronize_session=False
-    )
-
-
     db.session.delete(lead)
 
     db.session.commit()
 
 
-    return redirect("/leads?delete_result=success")
+    return redirect("/leads")
 
 
 # =========================================================
@@ -2224,6 +2210,24 @@ with app.app_context():
         {
             "username": "agent",
             "env_var": "AGENT_PASSWORD",
+            "role": "agent"
+        },
+
+        {
+            "username": "agent2",
+            "env_var": "AGENT2_PASSWORD",
+            "role": "agent"
+        },
+
+        {
+            "username": "agent3",
+            "env_var": "AGENT3_PASSWORD",
+            "role": "agent"
+        },
+
+        {
+            "username": "agent4",
+            "env_var": "AGENT4_PASSWORD",
             "role": "agent"
         }
 
