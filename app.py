@@ -1015,6 +1015,173 @@ def delete_lead(id):
 
 
 # =========================================================
+# RETURN LEAD TO DISCOVERY
+# =========================================================
+
+@app.route(
+    "/return-lead-to-discovery/<int:id>",
+    methods=["POST"]
+)
+def return_lead_to_discovery(id):
+
+    if not session.get("logged_in"):
+
+        return redirect("/login")
+
+
+    if not is_admin_or_developer():
+
+        return "Access denied", 403
+
+
+    lead = Lead.query.get_or_404(id)
+
+
+    source = str(lead.source or "Discovery").strip()
+
+    notes = str(lead.notes or "").strip()
+
+
+    property_finder_url_match = re.search(
+
+        r"Property Finder URL:\s*(https?://\S+)",
+
+        notes,
+
+        re.I
+
+    )
+
+
+    discovery_url = (
+
+        property_finder_url_match.group(1).strip()
+
+        if property_finder_url_match
+
+        else None
+
+    )
+
+
+    discovery_lead = None
+
+
+    if lead.phone:
+
+        discovery_lead = DiscoveryLead.query.filter(
+
+            db.func.trim(DiscoveryLead.phone) == lead.phone.strip()
+
+        ).first()
+
+
+    if discovery_lead is None and lead.name:
+
+        discovery_lead = DiscoveryLead.query.filter(
+
+            db.func.lower(db.func.trim(DiscoveryLead.title))
+
+            == lead.name.strip().lower()
+
+        ).first()
+
+
+    if discovery_lead is None:
+
+        is_short_term, short_term_reason = infer_short_term_classification(
+
+            lead.name,
+
+            notes,
+
+            source
+
+        )
+
+
+        discovery_lead = DiscoveryLead(
+
+            title=lead.name or "Returned lead",
+
+            description=notes,
+
+            city=lead.city or "UAE",
+
+            phone=lead.phone,
+
+            contact_status=(
+
+                "phone_found"
+
+                if lead.phone
+
+                else "no_contact_found"
+
+            ),
+
+            is_short_term=is_short_term,
+
+            short_term_reason=short_term_reason or None,
+
+            source=source,
+
+            url=discovery_url,
+
+            score=calculate_score(notes),
+
+            found_at=datetime.utcnow()
+
+        )
+
+
+        db.session.add(discovery_lead)
+
+
+    else:
+
+        if lead.phone and not discovery_lead.phone:
+
+            discovery_lead.phone = lead.phone
+
+            discovery_lead.contact_status = "phone_found"
+
+
+        if lead.city and not discovery_lead.city:
+
+            discovery_lead.city = lead.city
+
+
+        if notes and not discovery_lead.description:
+
+            discovery_lead.description = notes
+
+
+        if discovery_url and not discovery_lead.url:
+
+            discovery_lead.url = discovery_url
+
+
+    FollowUp.query.filter_by(
+
+        lead_id=lead.id
+
+    ).delete(
+
+        synchronize_session=False
+
+    )
+
+
+    db.session.delete(lead)
+
+    db.session.commit()
+
+
+    return redirect("/leads?return_result=success")
+
+
+# =========================================================
 # EDIT LEAD
 # =========================================================
 
