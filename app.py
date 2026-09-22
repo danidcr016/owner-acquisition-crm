@@ -922,7 +922,9 @@ def leads():
 
         if assigned_filter == "unassigned":
 
-            query = query.filter(Lead.assigned_to.is_(None))
+            query = query.filter(
+                Lead.assigned_to.is_(None)
+            )
 
         elif assigned_filter.isdigit():
 
@@ -2053,6 +2055,79 @@ def delete_discovery(id):
 
 
     return redirect("/discovery")
+
+
+# =========================================================
+# TEMPORARY CLEANUP: REMOVE DISCOVERY AGENCIES ALREADY IN LEADS
+# =========================================================
+
+@app.route(
+    "/discovery/remove-existing-leads",
+    methods=["POST"]
+)
+def remove_discovery_agencies_already_in_leads():
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    def normalized_phone(value):
+        return re.sub(r"\D", "", str(value or ""))
+
+    def normalized_text(value):
+        return " ".join(str(value or "").strip().lower().split())
+
+    leads = Lead.query.all()
+
+    lead_phones = {
+        normalized_phone(lead.phone)
+        for lead in leads
+        if normalized_phone(lead.phone)
+    }
+
+    lead_name_sources = {
+        (
+            normalized_text(lead.name),
+            normalized_text(lead.source)
+        )
+        for lead in leads
+        if normalized_text(lead.name)
+    }
+
+    duplicates = []
+
+    for opportunity in DiscoveryLead.query.all():
+
+        opportunity_phone = normalized_phone(opportunity.phone)
+        opportunity_key = (
+            normalized_text(opportunity.title),
+            normalized_text(opportunity.source)
+        )
+
+        phone_match = (
+            bool(opportunity_phone)
+            and opportunity_phone in lead_phones
+        )
+
+        name_source_match = (
+            bool(opportunity_key[0])
+            and opportunity_key in lead_name_sources
+        )
+
+        if phone_match or name_source_match:
+            duplicates.append(opportunity)
+
+    for opportunity in duplicates:
+        db.session.delete(opportunity)
+
+    db.session.commit()
+
+    return redirect(
+        "/discovery?sort=short_term_first&contact=all&agency_type=all&"
+        f"duplicates_removed={len(duplicates)}"
+    )
 
 
 # =========================================================
