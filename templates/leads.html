@@ -186,6 +186,21 @@ Leads - Owner Acquisition CRM
                 </div>
 
 
+                {% if current_user.role in ["admin", "developer"] %}
+                <div class="col-md-3">
+                    <label for="assigned_to" class="form-label">
+                        <i class="bi bi-person-check-fill"></i> Assigned to
+                    </label>
+                    <select id="assigned_to" name="assigned_to" class="form-select">
+                        <option value="">All users</option>
+                        <option value="unassigned" {% if assigned_filter == "unassigned" %}selected{% endif %}>Unassigned</option>
+                        {% for agent in agents %}
+                        <option value="{{ agent.id }}" {% if assigned_filter == agent.id|string %}selected{% endif %}>{{ agent.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
                 <!-- BUTTONS -->
 
                 <div class="col-md-2 d-flex gap-2">
@@ -241,7 +256,7 @@ Leads - Owner Acquisition CRM
 
             </span>
 
-            {% if search or status_filter %}
+            {% if search or status_filter or assigned_filter %}
 
                 <span class="badge bg-primary">
                     Active filter
@@ -717,7 +732,7 @@ Leads - Owner Acquisition CRM
 
         <div class="text-center py-5">
 
-            {% if search or status_filter %}
+            {% if search or status_filter or assigned_filter %}
 
                 <h3>
 

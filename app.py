@@ -856,6 +856,12 @@ def leads():
     ).strip()
 
 
+    assigned_filter = request.args.get(
+        "assigned_to",
+        ""
+    ).strip()
+
+
     # Suggestions
     if user.role in [
         "admin",
@@ -912,6 +918,19 @@ def leads():
         )
 
 
+    if user.role in ["admin", "developer"] and assigned_filter:
+
+        if assigned_filter == "unassigned":
+
+            query = query.filter(Lead.assigned_to.is_(None))
+
+        elif assigned_filter.isdigit():
+
+            query = query.filter(
+                Lead.assigned_to == int(assigned_filter)
+            )
+
+
     query = query.order_by(
         Lead.id.asc()
     )
@@ -941,6 +960,8 @@ def leads():
         search=search,
 
         status_filter=status_filter,
+
+        assigned_filter=assigned_filter,
 
         current_user=user,
 
