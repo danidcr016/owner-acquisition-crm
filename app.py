@@ -1010,6 +1010,97 @@ def delete_lead(id):
 
 
 # =========================================================
+# RETURN LEAD TO DISCOVERY
+# =========================================================
+
+@app.route(
+    "/return-lead-to-discovery/<int:id>",
+    methods=["POST"]
+)
+def return_lead_to_discovery(id):
+
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+
+    lead = Lead.query.get_or_404(id)
+
+    notes = str(lead.notes or "").strip()
+
+    source = str(lead.source or "Discovery").strip()
+
+
+    url_match = re.search(
+        r"Property Finder URL:\s*(https?://\S+)",
+        notes,
+        re.I
+    )
+
+    discovery_url = url_match.group(1).strip() if url_match else None
+
+
+    existing_discovery = None
+
+    if discovery_url:
+        existing_discovery = DiscoveryLead.query.filter_by(
+            url=discovery_url
+        ).first()
+
+    if existing_discovery is None and lead.phone:
+        existing_discovery = DiscoveryLead.query.filter(
+            db.func.trim(DiscoveryLead.phone) == lead.phone.strip()
+        ).first()
+
+    if existing_discovery is None and lead.name:
+        existing_discovery = DiscoveryLead.query.filter(
+            db.func.lower(db.func.trim(DiscoveryLead.title))
+            == lead.name.strip().lower()
+        ).first()
+
+
+    if existing_discovery is None:
+        is_short_term, short_term_reason = infer_short_term_classification(
+            lead.name,
+            notes,
+            source
+        )
+
+        existing_discovery = DiscoveryLead(
+            title=lead.name or "Returned lead",
+            description=notes,
+            city=lead.city or "UAE",
+            phone=lead.phone,
+            contact_status=(
+                "phone_found" if lead.phone else "no_contact_found"
+            ),
+            is_short_term=is_short_term,
+            short_term_reason=short_term_reason or None,
+            source=source,
+            url=discovery_url,
+            score=calculate_score(notes),
+            found_at=datetime.utcnow()
+        )
+
+        db.session.add(existing_discovery)
+
+
+    FollowUp.query.filter_by(
+        lead_id=lead.id
+    ).delete(
+        synchronize_session=False
+    )
+
+    db.session.delete(lead)
+    db.session.commit()
+
+    return redirect("/leads?return_result=success")
+
+
+# =========================================================
 # EDIT LEAD
 # =========================================================
 
@@ -1884,9 +1975,10 @@ def add_discovery_to_leads(id):
 
     try:
         db.session.add(lead)
+        db.session.delete(discovery_lead)
         db.session.commit()
         print(
-            f"Discovery opportunity added to Leads: {lead.name} "
+            f"Discovery opportunity moved to Leads: {lead.name} "
             f"(lead_id={lead.id}, assigned_to={assigned_user.username})",
             flush=True
         )
@@ -1904,7 +1996,7 @@ def add_discovery_to_leads(id):
 
     return redirect(
         "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-        f"lead_result=added&lead_name={discovery_lead.id}"
+        "lead_result=added"
     )
 
 

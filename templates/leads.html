@@ -26,6 +26,14 @@ Leads - Owner Acquisition CRM
         <a href="/add-lead" class="btn btn-primary"><i class="bi bi-person-plus-fill"></i> New Lead</a>
     </div>
 </div>
+{% if request.args.get("return_result") == "success" %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-arrow-return-left"></i>
+    The lead was returned to Discovery and removed from Leads.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
 <!-- =========================
      SEARCH + FILTERS
 ========================== -->
@@ -488,6 +496,24 @@ Leads - Owner Acquisition CRM
 
 
                                 {% endif %}
+                                <!-- RETURN TO DISCOVERY -->
+                                {% if current_user.role in ["admin", "developer"] %}
+                                <form
+                                    action="/return-lead-to-discovery/{{ lead.id }}"
+                                    method="POST"
+                                    class="d-inline"
+                                    onsubmit="return confirm('Return this lead to Discovery? It will be removed from Leads and become available for reassignment.');"
+                                >
+                                    <button
+                                        type="submit"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        title="Return to Discovery"
+                                    >
+                                        <i class="bi bi-arrow-return-left"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+
                                 <!-- DELETE -->
 
                                 {% if current_user.role in ["admin", "developer"] %}
