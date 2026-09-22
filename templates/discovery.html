@@ -97,12 +97,6 @@
     {{ request.args.get("deleted") }} opportunities without a phone number were deleted.
 </div>
 {% endif %}
-{% if request.args.get("duplicates_removed") is not none %}
-<div class="alert alert-success mb-4" role="status">
-    <i class="bi bi-check-circle-fill"></i>
-    {{ request.args.get("duplicates_removed") }} agencies already assigned to Leads were removed from Discovery.
-</div>
-{% endif %}
 {% if request.args.get("lead_result") == "added" %}
 <div class="alert alert-success mb-4" role="status">
     <i class="bi bi-person-check-fill"></i>
@@ -139,12 +133,6 @@
             {% else %}
                 <i class="bi bi-search"></i> Run Search
             {% endif %}
-        </button>
-    </form>
-    <form action="/discovery/remove-existing-leads" method="POST"
-          onsubmit="return confirm('Remove from Discovery every agency that already exists in Leads? Leads will not be modified.');">
-        <button type="submit" class="btn btn-outline-warning" {% if scan_running %}disabled{% endif %}>
-            <i class="bi bi-person-check-fill"></i> Remove agencies already in Leads
         </button>
     </form>
     <form action="/discovery/delete-without-phone" method="POST"

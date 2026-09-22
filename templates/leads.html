@@ -187,15 +187,19 @@ Leads - Owner Acquisition CRM
 
 
                 {% if current_user.role in ["admin", "developer"] %}
+                <!-- ASSIGNED USER FILTER -->
                 <div class="col-md-3">
                     <label for="assigned_to" class="form-label">
-                        <i class="bi bi-person-check-fill"></i> Assigned to
+                        <i class="bi bi-person-check-fill"></i>
+                        Assigned to
                     </label>
                     <select id="assigned_to" name="assigned_to" class="form-select">
                         <option value="">All users</option>
                         <option value="unassigned" {% if assigned_filter == "unassigned" %}selected{% endif %}>Unassigned</option>
                         {% for agent in agents %}
-                        <option value="{{ agent.id }}" {% if assigned_filter == agent.id|string %}selected{% endif %}>{{ agent.username }}</option>
+                        <option value="{{ agent.id }}" {% if assigned_filter == agent.id|string %}selected{% endif %}>
+                            {{ agent.username }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
