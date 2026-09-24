@@ -470,6 +470,22 @@ def discovery_company_display_name(records):
     return name.strip(" -_,") or str(shortest.title or "Property Finder agency")
 
 
+def extract_active_listings(description):
+    match = re.search(r"Active\s+listings\s*:\s*([0-9][0-9,]*)", str(description or ""), re.I)
+    if not match:
+        return None
+    try:
+        return int(match.group(1).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def group_active_listings(records):
+    values = [extract_active_listings(row.description) for row in records]
+    values = [value for value in values if value is not None]
+    return max(values) if values else None
+
+
 def group_discovery_records(records):
     buckets = {}
     order = []
@@ -491,6 +507,7 @@ def group_discovery_records(records):
         representative.display_title = discovery_company_display_name(members)
         representative.related_records = members
         representative.group_count = len(members)
+        representative.active_listings = group_active_listings(members)
         grouped.append(representative)
     return grouped
 
@@ -1800,6 +1817,7 @@ def discovery():
     sort_by = request.args.get("sort", "short_term_first").strip()
     contact_filter = request.args.get("contact", "all").strip()
     agency_type = request.args.get("agency_type", "all").strip()
+    listings_filter = request.args.get("active_listings", "all").strip()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
 
     query = DiscoveryLead.query
@@ -1820,6 +1838,28 @@ def discovery():
 
     records = query.all()
     groups = group_discovery_records(records)
+
+    listing_ranges = {
+        "1_10": (1, 10),
+        "11_25": (11, 25),
+        "26_50": (26, 50),
+        "51_100": (51, 100),
+        "101_250": (101, 250),
+        "251_500": (251, 500),
+        "500_plus": (501, None),
+    }
+    if listings_filter == "unknown":
+        groups = [item for item in groups if item.active_listings is None]
+    elif listings_filter in listing_ranges:
+        minimum, maximum = listing_ranges[listings_filter]
+        groups = [
+            item for item in groups
+            if item.active_listings is not None
+            and item.active_listings >= minimum
+            and (maximum is None or item.active_listings <= maximum)
+        ]
+    else:
+        listings_filter = "all"
 
     def group_sort_value(item):
         members = item.related_records
@@ -1856,6 +1896,7 @@ def discovery():
         sort_by=sort_by,
         contact_filter=contact_filter,
         agency_type=agency_type,
+        listings_filter=listings_filter,
         current_user=user,
         agents=get_agents(),
         scan_running=craigslist_scan_status["running"],
