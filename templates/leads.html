@@ -702,12 +702,26 @@ Leads - Owner Acquisition CRM
 
                 </div>
 
+                {% if lead.associated_contacts %}
+                <hr>
+                <h6><i class="bi bi-telephone-forward-fill"></i> Associated agency contacts</h6>
+                <div class="list-group mb-3">
+                    {% for contact in lead.associated_contacts %}
+                    <div class="list-group-item">
+                        <strong>{{ contact.title }}</strong><br>
+                        <span class="text-muted">{{ contact.city or 'UAE' }}</span><br>
+                        {% if contact.phone %}<a href="tel:{{ contact.phone }}">{{ contact.phone }}</a>{% else %}<span class="text-muted">No phone</span>{% endif %}
+                        {% if contact.url %} · <a href="{{ contact.url }}" target="_blank" rel="noopener noreferrer">Property Finder</a>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 <hr>
 
                 <h6>📝 Notes</h6>
 
-                <p class="mb-0">
-                    {{ lead.notes or "No notes." }}
+                <p class="mb-0" style="white-space:pre-line;">
+                    {% if lead.associated_contacts %}Grouped Discovery agency with {{ lead.associated_contacts|length }} associated records.{% else %}{{ lead.notes or "No notes." }}{% endif %}
                 </p>
 
             </div>

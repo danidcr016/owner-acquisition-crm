@@ -1,5 +1,7 @@
 import os
 import re
+import json
+import math
 import secrets
 import threading
 
@@ -262,27 +264,6 @@ class FollowUp(db.Model):
 
 
 # =========================================================
-# DISCOVERY COMPANY GROUP MODEL
-# =========================================================
-class DiscoveryCompanyGroup(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.String(50), nullable=False, default="NEW")
-    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    assigned_user = db.relationship("User", foreign_keys=[assigned_to])
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    members = db.relationship(
-        "DiscoveryLead",
-        back_populates="parent_company",
-        foreign_keys="DiscoveryLead.parent_company_id",
-        lazy=True
-    )
-
-    def __repr__(self):
-        return f"<DiscoveryCompanyGroup {self.name}>"
-
-# =========================================================
 # DISCOVERY LEAD MODEL
 # =========================================================
 
@@ -342,16 +323,6 @@ class DiscoveryLead(db.Model):
         default=datetime.utcnow
     )
 
-    parent_company_id = db.Column(
-        db.Integer,
-        db.ForeignKey("discovery_company_group.id"),
-        nullable=True
-    )
-    parent_company = db.relationship(
-        "DiscoveryCompanyGroup",
-        back_populates="members",
-        foreign_keys=[parent_company_id]
-    )
     def __repr__(self):
 
         return f"<DiscoveryLead {self.title}>"
@@ -452,6 +423,128 @@ def infer_short_term_classification(title, description, source, explicit=None, r
     searchable = f"{title or ''} {description or ''}".lower()
     matches = [value for value in SHORT_TERM_INDICATORS if value in searchable]
     return bool(matches), ", ".join(dict.fromkeys(matches))
+
+
+# =========================================================
+# AUTOMATIC DISCOVERY COMPANY GROUPING
+# =========================================================
+_LOCATION_SUFFIXES = (
+    "dubai", "abu dhabi", "sharjah", "shj", "ras al khaimah", "rak",
+    "ajman", "fujairah", "umm al quwain", "uaq", "al ain"
+)
+
+
+def discovery_company_key(name):
+    """Conservative canonical key used to show related PF profiles as one agency."""
+    value = str(name or "").lower().strip()
+    value = re.sub(r"\bl\.?\s*l\.?\s*c\.?\b|\bfz[- ]?llc\b|\bfze\b|\bpjsc\b|\bltd\b", " ", value)
+    value = re.sub(r"\([^)]*\bbranch\b[^)]*\)", " ", value)
+    value = re.sub(r"\b(main\s+branch|branch)\b", " ", value)
+    value = re.sub(r"\s+", " ", value).strip(" -_,./")
+
+    locations = "|".join(re.escape(item) for item in _LOCATION_SUFFIXES)
+    value = re.sub(rf"(?:\s*[-,]\s*|\s+)({locations})$", "", value).strip(" -_,./")
+
+    # PF often appends a branch/division after a dash. Only collapse the suffix
+    # where the company base is specific enough (at least three words).
+    parts = re.split(r"\s+-\s+|-(?=[a-z])", value, maxsplit=1)
+    if len(parts) == 2 and len(re.findall(r"[a-z0-9]+", parts[0])) >= 3:
+        suffix = parts[1].strip()
+        known_division = any(token in suffix for token in (
+            "branch", "division", "leasing", "portfolio", "holiday home",
+            "business bay", "marina", "motor city", "al furjan", "creek harbour"
+        ))
+        branded_division = "." in suffix
+        if known_division or branded_division or len(suffix.split()) <= 3:
+            value = parts[0].strip()
+
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return " ".join(value.split())
+
+
+def discovery_company_display_name(records):
+    shortest = min(records, key=lambda row: (len(row.title or ""), row.id))
+    name = str(shortest.title or "Property Finder agency").strip()
+    name = re.sub(r"\s*[-,]\s*(RAK|SHJ|Dubai|Abu Dhabi|Sharjah|Ras Al Khaimah)\s*$", "", name, flags=re.I)
+    name = re.sub(r"\s*\([^)]*branch[^)]*\)\s*$", "", name, flags=re.I)
+    return name.strip(" -_,") or str(shortest.title or "Property Finder agency")
+
+
+def group_discovery_records(records):
+    buckets = {}
+    order = []
+    for record in records:
+        key = discovery_company_key(record.title)
+        # Ambiguous short names remain independent.
+        if len(key) < 8 or len(key.split()) < 2:
+            key = f"record:{record.id}"
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(record)
+
+    grouped = []
+    for key in order:
+        members = buckets[key]
+        representative = members[0]
+        representative.company_key = key
+        representative.display_title = discovery_company_display_name(members)
+        representative.related_records = members
+        representative.group_count = len(members)
+        grouped.append(representative)
+    return grouped
+
+
+def serialize_discovery_group(records):
+    return [
+        {
+            "title": row.title,
+            "description": row.description,
+            "city": row.city,
+            "phone": row.phone,
+            "contact_status": row.contact_status,
+            "is_short_term": bool(row.is_short_term),
+            "short_term_reason": row.short_term_reason,
+            "source": row.source,
+            "url": row.url,
+            "score": row.score,
+            "found_at": row.found_at.isoformat() if row.found_at else None,
+        }
+        for row in records
+    ]
+
+
+def extract_discovery_group_data(notes):
+    match = re.search(r"DISCOVERY_GROUP_DATA:(\[.*\])", str(notes or ""), re.S)
+    if not match:
+        return []
+    try:
+        data = json.loads(match.group(1))
+        return data if isinstance(data, list) else []
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+
+
+class GroupPagination:
+    def __init__(self, items, page, per_page, total):
+        self.items = items
+        self.page = page
+        self.per_page = per_page
+        self.total = total
+        self.pages = max(1, math.ceil(total / per_page)) if total else 0
+        self.has_prev = page > 1
+        self.has_next = page < self.pages
+        self.prev_num = page - 1 if self.has_prev else None
+        self.next_num = page + 1 if self.has_next else None
+
+    def iter_pages(self, left_edge=1, right_edge=1, left_current=2, right_current=2):
+        last = 0
+        for number in range(1, self.pages + 1):
+            if number <= left_edge or number > self.pages - right_edge or (self.page - left_current <= number <= self.page + right_current):
+                if last + 1 != number:
+                    yield None
+                yield number
+                last = number
 
 
 # =========================================================
@@ -970,6 +1063,8 @@ def leads():
 
 
     all_leads = query.all()
+    for lead_item in all_leads:
+        lead_item.associated_contacts = extract_discovery_group_data(lead_item.notes)
 
 
     if user.role in [
@@ -1084,12 +1179,32 @@ def return_lead_to_discovery(id):
     lead = Lead.query.get_or_404(id)
 
     notes = str(lead.notes or "").strip()
-    group_match = re.search(r"Discovery Company Group ID:\s*(\d+)", notes, re.I)
-    if group_match:
-        group = db.session.get(DiscoveryCompanyGroup, int(group_match.group(1)))
-        if group:
-            group.assigned_to = None
-            group.status = "NEW"
+    grouped_records = extract_discovery_group_data(notes)
+    if grouped_records:
+        for record in grouped_records:
+            record_url = record.get("url")
+            existing = DiscoveryLead.query.filter_by(url=record_url).first() if record_url else None
+            if existing:
+                continue
+            found_at = datetime.utcnow()
+            if record.get("found_at"):
+                try:
+                    found_at = datetime.fromisoformat(record["found_at"])
+                except (TypeError, ValueError):
+                    pass
+            db.session.add(DiscoveryLead(
+                title=record.get("title") or lead.name or "Returned agency",
+                description=record.get("description"),
+                city=record.get("city") or "UAE",
+                phone=record.get("phone"),
+                contact_status=record.get("contact_status") or ("phone_found" if record.get("phone") else "no_contact_found"),
+                is_short_term=bool(record.get("is_short_term")),
+                short_term_reason=record.get("short_term_reason"),
+                source=record.get("source") or "Property Finder",
+                url=record_url,
+                score=record.get("score") or 0,
+                found_at=found_at
+            ))
         FollowUp.query.filter_by(lead_id=lead.id).delete(synchronize_session=False)
         db.session.delete(lead)
         db.session.commit()
@@ -1667,69 +1782,6 @@ def delete_follow_up(id):
 
 
 # =========================================================
-# CONSERVATIVE COMPANY GROUP SUGGESTIONS
-# =========================================================
-_GROUP_SUFFIX_WORDS = {
-    "branch", "main branch", "dubai", "abu dhabi", "sharjah", "shj",
-    "ras al khaimah", "rak", "ajman", "fujairah", "umm al quwain", "uaq",
-    "al ain", "business bay", "dubai marina", "motor city", "al furjan",
-    "dubai creek harbour", "portfolio leasing", "local division"
-}
-
-
-def _company_group_key(value):
-    text_value = str(value or "").lower().strip()
-    text_value = re.sub(r"\bl\.?\s*l\.?\s*c\.?\b", " ", text_value)
-    text_value = re.sub(r"\bfz[- ]?llc\b|\bfze\b|\bpjsc\b|\bltd\b", " ", text_value)
-    text_value = re.sub(r"\([^)]*\bbranch\b[^)]*\)", " ", text_value)
-    text_value = re.sub(r"\b(branch|main branch)\b", " ", text_value)
-    text_value = re.sub(r"\s+", " ", text_value).strip(" -_,./")
-
-    # Remove an explicit trailing location code/name.
-    location_pattern = r"(?:-|,|\s)\s*(dubai|abu dhabi|sharjah|shj|ras al khaimah|rak|ajman|fujairah|umm al quwain|uaq|al ain)$"
-    text_value = re.sub(location_pattern, "", text_value).strip(" -_,./")
-
-    # Property Finder often appends a branch/division after a dash. Keep this
-    # conservative by only accepting a substantial base name (3+ words).
-    parts = re.split(r"\s+-\s+|-(?=[a-z])", text_value, maxsplit=1)
-    if len(parts) == 2:
-        left, right = parts[0].strip(), parts[1].strip()
-        left_words = re.findall(r"[a-z0-9]+", left)
-        if len(left_words) >= 3 and (right in _GROUP_SUFFIX_WORDS or "." in right or len(right.split()) <= 4):
-            text_value = left
-
-    text_value = re.sub(r"[^a-z0-9]+", " ", text_value)
-    return " ".join(text_value.split())
-
-
-def build_company_group_suggestions():
-    records = DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.is_(None)).all()
-    buckets = {}
-    for record in records:
-        key = _company_group_key(record.title)
-        if len(key) < 10 or len(key.split()) < 2:
-            continue
-        buckets.setdefault(key, []).append(record)
-
-    suggestions = []
-    for key, members in buckets.items():
-        if len(members) < 2:
-            continue
-        exact_keys = {_company_group_key(member.title) for member in members}
-        if len(exact_keys) != 1:
-            continue
-        display_name = min((member.title for member in members), key=len)
-        display_name = re.sub(r"\s*[-,]\s*(RAK|SHJ|Dubai|Abu Dhabi|Sharjah)\s*$", "", display_name, flags=re.I)
-        suggestions.append({
-            "key": key,
-            "name": display_name.strip(),
-            "members": sorted(members, key=lambda row: (row.city or "", row.title)),
-            "confidence": 95,
-        })
-    return sorted(suggestions, key=lambda item: (-len(item["members"]), item["name"].lower()))
-
-
-# =========================================================
 # DISCOVERY
 # =========================================================
 
@@ -1737,12 +1789,10 @@ def build_company_group_suggestions():
 def discovery():
     if not session.get("logged_in"):
         return redirect("/login")
-
     user = current_user()
     if not user:
         session.clear()
         return redirect("/login")
-
     if user.role == "agent":
         return redirect("/leads")
 
@@ -1753,88 +1803,55 @@ def discovery():
     page = max(request.args.get("page", 1, type=int) or 1, 1)
 
     query = DiscoveryLead.query
-
     if search:
-        query = query.filter(
-            DiscoveryLead.title.ilike(f"%{search}%")
-        )
+        query = query.filter(DiscoveryLead.title.ilike(f"%{search}%"))
     if agency_type == "short_term":
         query = query.filter(DiscoveryLead.is_short_term.is_(True))
     elif agency_type == "general":
         query = query.filter(DiscoveryLead.is_short_term.is_(False))
     else:
         agency_type = "all"
-
     if contact_filter == "phone_found":
-        query = query.filter(
-            DiscoveryLead.phone.isnot(None),
-            DiscoveryLead.phone != ""
-        )
-    elif contact_filter in {
-        "human_verification_required",
-        "external_contact_found",
-        "no_contact_found",
-    }:
-        query = query.filter(
-            DiscoveryLead.contact_status == contact_filter
-        )
+        query = query.filter(DiscoveryLead.phone.isnot(None), DiscoveryLead.phone != "")
+    elif contact_filter in {"human_verification_required", "external_contact_found", "no_contact_found"}:
+        query = query.filter(DiscoveryLead.contact_status == contact_filter)
     else:
         contact_filter = "all"
 
-    if sort_by == "short_term_first":
-        query = query.order_by(
-            case((DiscoveryLead.is_short_term.is_(True), 0), else_=1).asc(),
-            case((db.and_(DiscoveryLead.phone.isnot(None), DiscoveryLead.phone != ""), 0), else_=1).asc(),
-            DiscoveryLead.score.desc(),
-            DiscoveryLead.found_at.desc()
-        )
-    elif sort_by == "newest":
-        query = query.order_by(
-            DiscoveryLead.found_at.desc(),
-            DiscoveryLead.id.desc()
-        )
-    elif sort_by == "oldest":
-        query = query.order_by(
-            DiscoveryLead.found_at.asc(),
-            DiscoveryLead.id.asc()
-        )
-    elif sort_by == "score_high":
-        query = query.order_by(
-            DiscoveryLead.score.desc(),
-            DiscoveryLead.found_at.desc()
-        )
-    elif sort_by == "score_low":
-        query = query.order_by(
-            DiscoveryLead.score.asc(),
-            DiscoveryLead.found_at.desc()
-        )
-    else:
-        sort_by = "phone_first"
-        query = query.order_by(
-            case(
-                (DiscoveryLead.phone.isnot(None), 0),
-                else_=1
-            ).asc(),
-            DiscoveryLead.score.desc(),
-            DiscoveryLead.found_at.desc()
-        )
+    records = query.all()
+    groups = group_discovery_records(records)
 
-    pagination = query.paginate(
-        page=page,
-        per_page=25,
-        error_out=False
-    )
+    def group_sort_value(item):
+        members = item.related_records
+        has_short_term = any(bool(row.is_short_term) for row in members)
+        has_phone = any(bool(str(row.phone or "").strip()) for row in members)
+        best_score = max((row.score or 0) for row in members)
+        newest = max((row.found_at or datetime.min) for row in members)
+        oldest = min((row.found_at or datetime.max) for row in members)
+        if sort_by == "newest": return (newest, item.id)
+        if sort_by == "oldest": return (oldest, item.id)
+        if sort_by == "score_high": return (best_score, newest)
+        if sort_by == "score_low": return (-best_score, newest)
+        if sort_by == "phone_first": return (has_phone, best_score, newest)
+        return (has_short_term, has_phone, best_score, newest)
+
+    reverse = sort_by not in {"oldest", "score_low"}
+    groups.sort(key=group_sort_value, reverse=reverse)
+    per_page = 25
+    total_groups = len(groups)
+    pages = max(1, math.ceil(total_groups / per_page)) if total_groups else 0
+    if pages and page > pages:
+        page = pages
+    start_index = (page - 1) * per_page
+    page_items = groups[start_index:start_index + per_page]
+    pagination = GroupPagination(page_items, page, per_page, total_groups)
 
     return render_template(
         "discovery.html",
-        opportunities=pagination.items,
+        opportunities=page_items,
         pagination=pagination,
-        total_opportunities=DiscoveryLead.query.count(),
-        company_groups=DiscoveryCompanyGroup.query.order_by(DiscoveryCompanyGroup.name.asc()).all(),
-        group_suggestions=build_company_group_suggestions(),
-        total_company_groups=DiscoveryCompanyGroup.query.count(),
-        grouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.isnot(None)).count(),
-        ungrouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.is_(None)).count(),
+        total_opportunities=total_groups,
+        total_records=DiscoveryLead.query.count(),
         search=search,
         sort_by=sort_by,
         contact_filter=contact_filter,
@@ -1844,171 +1861,6 @@ def discovery():
         scan_running=craigslist_scan_status["running"],
         last_scan_count=craigslist_scan_status["added"]
     )
-
-# =========================================================
-# DISCOVERY COMPANY GROUP ACTIONS
-# =========================================================
-@app.route("/discovery/groups/approve-suggestion", methods=["POST"])
-def approve_discovery_group_suggestion():
-    if not session.get("logged_in"):
-        return redirect("/login")
-    if not is_admin_or_developer():
-        return "Access denied", 403
-
-    suggestion_key = str(request.form.get("suggestion_key") or "").strip()
-    suggestion_name = str(request.form.get("suggestion_name") or "").strip()
-    suggestions = {item["key"]: item for item in build_company_group_suggestions()}
-    suggestion = suggestions.get(suggestion_key)
-    if not suggestion or len(suggestion["members"]) < 2:
-        return redirect("/discovery?group_result=suggestion_missing")
-
-    group = DiscoveryCompanyGroup(name=suggestion_name or suggestion["name"], status="NEW")
-    db.session.add(group)
-    db.session.flush()
-    for record in suggestion["members"]:
-        if record.parent_company_id is None:
-            record.parent_company_id = group.id
-    db.session.commit()
-    return redirect(f"/discovery?group_result=created&group_id={group.id}")
-
-
-@app.route("/discovery/groups/approve-all-high-confidence", methods=["POST"])
-def approve_all_high_confidence_groups():
-    if not session.get("logged_in"):
-        return redirect("/login")
-    if not is_admin_or_developer():
-        return "Access denied", 403
-
-    suggestions = build_company_group_suggestions()
-    created = 0
-    for suggestion in suggestions:
-        available = [row for row in suggestion["members"] if row.parent_company_id is None]
-        if suggestion["confidence"] < 90 or len(available) < 2:
-            continue
-        group = DiscoveryCompanyGroup(name=suggestion["name"], status="NEW")
-        db.session.add(group)
-        db.session.flush()
-        for record in available:
-            record.parent_company_id = group.id
-        created += 1
-    db.session.commit()
-    return redirect(f"/discovery?group_result=bulk_created&created={created}")
-
-
-@app.route("/discovery/groups/create", methods=["POST"])
-def create_discovery_company_group():
-    if not session.get("logged_in"):
-        return redirect("/login")
-    if not is_admin_or_developer():
-        return "Access denied", 403
-
-    name = str(request.form.get("group_name") or "").strip()
-    selected_ids = request.form.getlist("selected_records")
-    record_ids = [int(value) for value in selected_ids if str(value).isdigit()]
-
-    if not name or len(record_ids) < 2:
-        return redirect("/discovery?group_result=invalid")
-
-    records = DiscoveryLead.query.filter(
-        DiscoveryLead.id.in_(record_ids),
-        DiscoveryLead.parent_company_id.is_(None)
-    ).all()
-    if len(records) < 2:
-        return redirect("/discovery?group_result=invalid")
-
-    group = DiscoveryCompanyGroup(name=name, status="NEW")
-    db.session.add(group)
-    db.session.flush()
-    for record in records:
-        record.parent_company_id = group.id
-    db.session.commit()
-    return redirect(f"/discovery?group_result=created&group_id={group.id}")
-
-
-@app.route("/discovery/groups/<int:group_id>/remove/<int:record_id>", methods=["POST"])
-def remove_discovery_record_from_group(group_id, record_id):
-    if not session.get("logged_in"):
-        return redirect("/login")
-    if not is_admin_or_developer():
-        return "Access denied", 403
-
-    group = DiscoveryCompanyGroup.query.get_or_404(group_id)
-    record = DiscoveryLead.query.get_or_404(record_id)
-    if record.parent_company_id != group.id:
-        return "Record does not belong to this group", 400
-
-    record.parent_company_id = None
-    db.session.flush()
-    remaining = DiscoveryLead.query.filter_by(parent_company_id=group.id).count()
-    if remaining == 0:
-        db.session.delete(group)
-    db.session.commit()
-    return redirect("/discovery?group_result=removed")
-
-
-@app.route("/discovery/groups/<int:group_id>/assign", methods=["POST"])
-def assign_discovery_company_group(group_id):
-    if not session.get("logged_in"):
-        return redirect("/login")
-    if not is_admin_or_developer():
-        return "Access denied", 403
-
-    group = DiscoveryCompanyGroup.query.get_or_404(group_id)
-    if group.assigned_to:
-        return redirect("/discovery?group_result=already_assigned")
-
-    assigned_to_raw = str(request.form.get("assigned_to") or "").strip()
-    if not assigned_to_raw.isdigit():
-        return redirect("/discovery?group_result=assignment_required")
-
-    assigned_user = User.query.filter(
-        User.id == int(assigned_to_raw),
-        User.role.in_(["agent", "admin", "developer"])
-    ).first()
-    if not assigned_user:
-        return redirect("/discovery?group_result=invalid_assignment")
-
-    members = DiscoveryLead.query.filter_by(parent_company_id=group.id).order_by(DiscoveryLead.id.asc()).all()
-    if not members:
-        return redirect("/discovery?group_result=empty")
-
-    contact_lines = []
-    urls = []
-    cities = []
-    primary_phone = ""
-    for member in members:
-        if member.city and member.city not in cities:
-            cities.append(member.city)
-        if member.url:
-            urls.append(member.url)
-        if member.phone and not primary_phone:
-            primary_phone = member.phone
-        contact_lines.append(
-            f"- {member.title} | {member.city or 'UAE'} | {member.phone or 'No phone'}"
-            + (f" | {member.url}" if member.url else "")
-        )
-
-    notes = (
-        f"Discovery Company Group ID: {group.id}\n"
-        f"Associated records: {len(members)}\n\n"
-        + "\n".join(contact_lines)
-    )
-    lead = Lead(
-        name=group.name,
-        phone=primary_phone,
-        email="",
-        city=", ".join(cities) or "UAE",
-        source="Discovery Group",
-        status="NEW",
-        notes=notes,
-        assigned_to=assigned_user.id,
-        created_at=datetime.utcnow()
-    )
-    db.session.add(lead)
-    group.assigned_to = assigned_user.id
-    group.status = "ASSIGNED"
-    db.session.commit()
-    return redirect("/discovery?group_result=assigned")
 
 
 # =========================================================
@@ -2185,117 +2037,74 @@ def craigslist_status():
 def add_discovery_to_leads(id):
     if not session.get("logged_in"):
         return redirect("/login")
-
     if not is_admin_or_developer():
         return "Access denied", 403
 
-    discovery_lead = DiscoveryLead.query.get_or_404(id)
-
+    representative = DiscoveryLead.query.get_or_404(id)
     assigned_to_raw = str(request.form.get("assigned_to") or "").strip()
-
     if not assigned_to_raw.isdigit():
-
-        return redirect(
-
-            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-
-            "lead_result=assignment_required"
-
-        )
-
+        return redirect("/discovery?lead_result=assignment_required")
     assigned_user = User.query.filter(
-
         User.id == int(assigned_to_raw),
-
         User.role.in_(["agent", "admin", "developer"])
-
     ).first()
-
     if not assigned_user:
+        return redirect("/discovery?lead_result=invalid_assignment")
 
-        return redirect(
+    key = discovery_company_key(representative.title)
+    all_records = DiscoveryLead.query.all()
+    members = [row for row in all_records if discovery_company_key(row.title) == key]
+    if not members:
+        members = [representative]
 
-            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-
-            "lead_result=invalid_assignment"
-
-        )
-    phone = str(discovery_lead.phone or "").strip()
-    name = str(discovery_lead.title or "").strip()
-    source = str(discovery_lead.source or "Property Finder").strip()
-    description = str(discovery_lead.description or "").strip()
-
-    email_match = re.search(
-        r"(?:^|\|)\s*Email:\s*([^|\s]+@[^|\s]+)",
-        description,
-        re.I
-    )
-    email = email_match.group(1).strip() if email_match else ""
+    display_name = discovery_company_display_name(members)
+    phones = [str(row.phone).strip() for row in members if str(row.phone or "").strip()]
+    cities = list(dict.fromkeys(str(row.city).strip() for row in members if str(row.city or "").strip()))
+    email = ""
+    for row in members:
+        email_match = re.search(r"(?:^|\|)\s*Email:\s*([^|\s]+@[^|\s]+)", str(row.description or ""), re.I)
+        if email_match:
+            email = email_match.group(1).strip()
+            break
 
     existing_lead = None
-    if phone:
+    for phone in phones:
+        existing_lead = Lead.query.filter(db.func.trim(Lead.phone) == phone).first()
+        if existing_lead:
+            break
+    if existing_lead is None:
         existing_lead = Lead.query.filter(
-            db.func.trim(Lead.phone) == phone
+            db.func.lower(db.func.trim(Lead.name)) == display_name.lower()
         ).first()
-
-    if existing_lead is None and name:
-        existing_lead = Lead.query.filter(
-            db.func.lower(db.func.trim(Lead.name)) == name.lower(),
-            db.func.lower(db.func.trim(Lead.source)) == source.lower()
-        ).first()
-
     if existing_lead:
-        return redirect(
-            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-            f"lead_result=exists&lead_name={discovery_lead.id}"
-        )
+        return redirect("/discovery?lead_result=exists")
 
-    notes_parts = []
-    if description:
-        notes_parts.append(description)
-    if discovery_lead.url:
-        notes_parts.append(f"Property Finder URL: {discovery_lead.url}")
-    if discovery_lead.is_short_term:
-        reason = discovery_lead.short_term_reason or "Short-term indicator found"
-        notes_parts.append(f"Short-term priority: {reason}")
-
+    group_data = serialize_discovery_group(members)
+    visible_notes = [
+        f"Associated Property Finder records: {len(members)}",
+        "All company names and phone numbers are available in the Info window."
+    ]
     lead = Lead(
-        name=name or "Property Finder agency",
-        phone=phone,
+        name=display_name,
+        phone=phones[0] if phones else "",
         email=email,
-        city=str(discovery_lead.city or "UAE").strip(),
-        source=source,
+        city=", ".join(cities) if cities else "UAE",
+        source="Discovery",
         status="NEW",
-        notes="\n\n".join(notes_parts),
+        notes="\n".join(visible_notes) + "\nDISCOVERY_GROUP_DATA:" + json.dumps(group_data, ensure_ascii=False),
         assigned_to=assigned_user.id,
         created_at=datetime.utcnow()
     )
-
     try:
         db.session.add(lead)
-        db.session.delete(discovery_lead)
+        for row in members:
+            db.session.delete(row)
         db.session.commit()
-        print(
-            f"Discovery opportunity moved to Leads: {lead.name} "
-            f"(lead_id={lead.id}, assigned_to={assigned_user.username})",
-            flush=True
-        )
     except Exception as exc:
         db.session.rollback()
-        print(
-            "Failed to add Discovery opportunity to Leads:",
-            repr(exc),
-            flush=True
-        )
-        return redirect(
-            "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-            "lead_result=error"
-        )
-
-    return redirect(
-        "/discovery?sort=short_term_first&contact=all&agency_type=all&"
-        "lead_result=added"
-    )
+        print("Failed to move grouped Discovery agency to Leads:", repr(exc), flush=True)
+        return redirect("/discovery?lead_result=error")
+    return redirect("/discovery?lead_result=added")
 
 
 # =========================================================
@@ -2507,14 +2316,6 @@ with app.app_context():
 
     ]
 
-
-    # Add parent company relation if missing
-    if "parent_company_id" not in discovery_lead_columns:
-        with db.engine.connect() as connection:
-            connection.execute(text(
-                "ALTER TABLE discovery_lead ADD COLUMN parent_company_id INTEGER"
-            ))
-            connection.commit()
 
     # Add phone if missing
     if "phone" not in discovery_lead_columns:
