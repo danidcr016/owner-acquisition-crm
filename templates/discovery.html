@@ -129,6 +129,7 @@
 </div>
 {% endif %}
 {% if request.args.get("group_result") == "created" %}<div class="alert alert-success">Company group created successfully.</div>{% endif %}
+{% if request.args.get("group_result") == "bulk_created" %}<div class="alert alert-success">{{ request.args.get("created", "0") }} high-confidence company groups were created. No records were deleted.</div>{% endif %}
 {% if request.args.get("group_result") == "removed" %}<div class="alert alert-success">The record was removed from the company group.</div>{% endif %}
 {% if request.args.get("group_result") == "assigned" %}<div class="alert alert-success">The company group was assigned as one commercial lead.</div>{% endif %}
 {% if request.args.get("group_result") in ["invalid", "assignment_required", "invalid_assignment", "empty"] %}<div class="alert alert-warning">The company group action could not be completed. Check the selection and assigned user.</div>{% endif %}
@@ -155,6 +156,44 @@
         </button>
     </form>
 </div>
+
+{% if group_suggestions %}
+<div class="card shadow-sm mb-4 border-warning">
+    <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <strong><i class="bi bi-magic"></i> High-confidence grouping suggestions</strong>
+            <div class="small text-muted">{{ group_suggestions|length }} suggested parent companies. Records are preserved and can be ungrouped later.</div>
+        </div>
+        <form action="/discovery/groups/approve-all-high-confidence" method="POST" onsubmit="return confirm('Approve all high-confidence suggestions? No records will be deleted.');">
+            <button class="btn btn-sm btn-warning" type="submit">Approve all high-confidence</button>
+        </form>
+    </div>
+    <div class="card-body">
+        {% for suggestion in group_suggestions[:25] %}
+        <div class="border rounded-3 p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <strong>{{ suggestion.name }}</strong>
+                    <span class="badge bg-success ms-2">{{ suggestion.confidence }}% confidence</span>
+                    <div class="small text-muted">{{ suggestion.members|length }} related records</div>
+                </div>
+                <form action="/discovery/groups/approve-suggestion" method="POST" class="d-flex gap-2 align-items-center">
+                    <input type="hidden" name="suggestion_key" value="{{ suggestion.key }}">
+                    <input class="form-control form-control-sm" name="suggestion_name" value="{{ suggestion.name }}" aria-label="Parent company name">
+                    <button class="btn btn-sm btn-success" type="submit">Approve group</button>
+                </form>
+            </div>
+            <div class="small mt-2">
+                {% for member in suggestion.members %}
+                <div>{{ member.title }} · {{ member.city or 'UAE' }} · {{ member.phone or 'No phone' }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        {% if group_suggestions|length > 25 %}<div class="text-muted small">Showing the first 25 suggestions. Approve some groups to reveal more.</div>{% endif %}
+    </div>
+</div>
+{% endif %}
 
 {% if company_groups %}
 <div class="mb-4">

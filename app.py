@@ -1667,6 +1667,69 @@ def delete_follow_up(id):
 
 
 # =========================================================
+# CONSERVATIVE COMPANY GROUP SUGGESTIONS
+# =========================================================
+_GROUP_SUFFIX_WORDS = {
+    "branch", "main branch", "dubai", "abu dhabi", "sharjah", "shj",
+    "ras al khaimah", "rak", "ajman", "fujairah", "umm al quwain", "uaq",
+    "al ain", "business bay", "dubai marina", "motor city", "al furjan",
+    "dubai creek harbour", "portfolio leasing", "local division"
+}
+
+
+def _company_group_key(value):
+    text_value = str(value or "").lower().strip()
+    text_value = re.sub(r"\bl\.?\s*l\.?\s*c\.?\b", " ", text_value)
+    text_value = re.sub(r"\bfz[- ]?llc\b|\bfze\b|\bpjsc\b|\bltd\b", " ", text_value)
+    text_value = re.sub(r"\([^)]*\bbranch\b[^)]*\)", " ", text_value)
+    text_value = re.sub(r"\b(branch|main branch)\b", " ", text_value)
+    text_value = re.sub(r"\s+", " ", text_value).strip(" -_,./")
+
+    # Remove an explicit trailing location code/name.
+    location_pattern = r"(?:-|,|\s)\s*(dubai|abu dhabi|sharjah|shj|ras al khaimah|rak|ajman|fujairah|umm al quwain|uaq|al ain)$"
+    text_value = re.sub(location_pattern, "", text_value).strip(" -_,./")
+
+    # Property Finder often appends a branch/division after a dash. Keep this
+    # conservative by only accepting a substantial base name (3+ words).
+    parts = re.split(r"\s+-\s+|-(?=[a-z])", text_value, maxsplit=1)
+    if len(parts) == 2:
+        left, right = parts[0].strip(), parts[1].strip()
+        left_words = re.findall(r"[a-z0-9]+", left)
+        if len(left_words) >= 3 and (right in _GROUP_SUFFIX_WORDS or "." in right or len(right.split()) <= 4):
+            text_value = left
+
+    text_value = re.sub(r"[^a-z0-9]+", " ", text_value)
+    return " ".join(text_value.split())
+
+
+def build_company_group_suggestions():
+    records = DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.is_(None)).all()
+    buckets = {}
+    for record in records:
+        key = _company_group_key(record.title)
+        if len(key) < 10 or len(key.split()) < 2:
+            continue
+        buckets.setdefault(key, []).append(record)
+
+    suggestions = []
+    for key, members in buckets.items():
+        if len(members) < 2:
+            continue
+        exact_keys = {_company_group_key(member.title) for member in members}
+        if len(exact_keys) != 1:
+            continue
+        display_name = min((member.title for member in members), key=len)
+        display_name = re.sub(r"\s*[-,]\s*(RAK|SHJ|Dubai|Abu Dhabi|Sharjah)\s*$", "", display_name, flags=re.I)
+        suggestions.append({
+            "key": key,
+            "name": display_name.strip(),
+            "members": sorted(members, key=lambda row: (row.city or "", row.title)),
+            "confidence": 95,
+        })
+    return sorted(suggestions, key=lambda item: (-len(item["members"]), item["name"].lower()))
+
+
+# =========================================================
 # DISCOVERY
 # =========================================================
 
@@ -1768,6 +1831,7 @@ def discovery():
         pagination=pagination,
         total_opportunities=DiscoveryLead.query.count(),
         company_groups=DiscoveryCompanyGroup.query.order_by(DiscoveryCompanyGroup.name.asc()).all(),
+        group_suggestions=build_company_group_suggestions(),
         total_company_groups=DiscoveryCompanyGroup.query.count(),
         grouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.isnot(None)).count(),
         ungrouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.is_(None)).count(),
@@ -1784,6 +1848,53 @@ def discovery():
 # =========================================================
 # DISCOVERY COMPANY GROUP ACTIONS
 # =========================================================
+@app.route("/discovery/groups/approve-suggestion", methods=["POST"])
+def approve_discovery_group_suggestion():
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    suggestion_key = str(request.form.get("suggestion_key") or "").strip()
+    suggestion_name = str(request.form.get("suggestion_name") or "").strip()
+    suggestions = {item["key"]: item for item in build_company_group_suggestions()}
+    suggestion = suggestions.get(suggestion_key)
+    if not suggestion or len(suggestion["members"]) < 2:
+        return redirect("/discovery?group_result=suggestion_missing")
+
+    group = DiscoveryCompanyGroup(name=suggestion_name or suggestion["name"], status="NEW")
+    db.session.add(group)
+    db.session.flush()
+    for record in suggestion["members"]:
+        if record.parent_company_id is None:
+            record.parent_company_id = group.id
+    db.session.commit()
+    return redirect(f"/discovery?group_result=created&group_id={group.id}")
+
+
+@app.route("/discovery/groups/approve-all-high-confidence", methods=["POST"])
+def approve_all_high_confidence_groups():
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    suggestions = build_company_group_suggestions()
+    created = 0
+    for suggestion in suggestions:
+        available = [row for row in suggestion["members"] if row.parent_company_id is None]
+        if suggestion["confidence"] < 90 or len(available) < 2:
+            continue
+        group = DiscoveryCompanyGroup(name=suggestion["name"], status="NEW")
+        db.session.add(group)
+        db.session.flush()
+        for record in available:
+            record.parent_company_id = group.id
+        created += 1
+    db.session.commit()
+    return redirect(f"/discovery?group_result=bulk_created&created={created}")
+
+
 @app.route("/discovery/groups/create", methods=["POST"])
 def create_discovery_company_group():
     if not session.get("logged_in"):
