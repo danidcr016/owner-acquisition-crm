@@ -262,6 +262,27 @@ class FollowUp(db.Model):
 
 
 # =========================================================
+# DISCOVERY COMPANY GROUP MODEL
+# =========================================================
+class DiscoveryCompanyGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default="NEW")
+    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assigned_user = db.relationship("User", foreign_keys=[assigned_to])
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    members = db.relationship(
+        "DiscoveryLead",
+        back_populates="parent_company",
+        foreign_keys="DiscoveryLead.parent_company_id",
+        lazy=True
+    )
+
+    def __repr__(self):
+        return f"<DiscoveryCompanyGroup {self.name}>"
+
+# =========================================================
 # DISCOVERY LEAD MODEL
 # =========================================================
 
@@ -321,6 +342,16 @@ class DiscoveryLead(db.Model):
         default=datetime.utcnow
     )
 
+    parent_company_id = db.Column(
+        db.Integer,
+        db.ForeignKey("discovery_company_group.id"),
+        nullable=True
+    )
+    parent_company = db.relationship(
+        "DiscoveryCompanyGroup",
+        back_populates="members",
+        foreign_keys=[parent_company_id]
+    )
     def __repr__(self):
 
         return f"<DiscoveryLead {self.title}>"
@@ -1053,6 +1084,16 @@ def return_lead_to_discovery(id):
     lead = Lead.query.get_or_404(id)
 
     notes = str(lead.notes or "").strip()
+    group_match = re.search(r"Discovery Company Group ID:\s*(\d+)", notes, re.I)
+    if group_match:
+        group = db.session.get(DiscoveryCompanyGroup, int(group_match.group(1)))
+        if group:
+            group.assigned_to = None
+            group.status = "NEW"
+        FollowUp.query.filter_by(lead_id=lead.id).delete(synchronize_session=False)
+        db.session.delete(lead)
+        db.session.commit()
+        return redirect("/leads?return_result=success")
 
     source = str(lead.source or "Discovery").strip()
 
@@ -1726,6 +1767,10 @@ def discovery():
         opportunities=pagination.items,
         pagination=pagination,
         total_opportunities=DiscoveryLead.query.count(),
+        company_groups=DiscoveryCompanyGroup.query.order_by(DiscoveryCompanyGroup.name.asc()).all(),
+        total_company_groups=DiscoveryCompanyGroup.query.count(),
+        grouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.isnot(None)).count(),
+        ungrouped_records=DiscoveryLead.query.filter(DiscoveryLead.parent_company_id.is_(None)).count(),
         search=search,
         sort_by=sort_by,
         contact_filter=contact_filter,
@@ -1735,6 +1780,125 @@ def discovery():
         scan_running=craigslist_scan_status["running"],
         last_scan_count=craigslist_scan_status["added"]
     )
+
+# =========================================================
+# DISCOVERY COMPANY GROUP ACTIONS
+# =========================================================
+@app.route("/discovery/groups/create", methods=["POST"])
+def create_discovery_company_group():
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    name = str(request.form.get("group_name") or "").strip()
+    selected_ids = request.form.getlist("selected_records")
+    record_ids = [int(value) for value in selected_ids if str(value).isdigit()]
+
+    if not name or len(record_ids) < 2:
+        return redirect("/discovery?group_result=invalid")
+
+    records = DiscoveryLead.query.filter(
+        DiscoveryLead.id.in_(record_ids),
+        DiscoveryLead.parent_company_id.is_(None)
+    ).all()
+    if len(records) < 2:
+        return redirect("/discovery?group_result=invalid")
+
+    group = DiscoveryCompanyGroup(name=name, status="NEW")
+    db.session.add(group)
+    db.session.flush()
+    for record in records:
+        record.parent_company_id = group.id
+    db.session.commit()
+    return redirect(f"/discovery?group_result=created&group_id={group.id}")
+
+
+@app.route("/discovery/groups/<int:group_id>/remove/<int:record_id>", methods=["POST"])
+def remove_discovery_record_from_group(group_id, record_id):
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    group = DiscoveryCompanyGroup.query.get_or_404(group_id)
+    record = DiscoveryLead.query.get_or_404(record_id)
+    if record.parent_company_id != group.id:
+        return "Record does not belong to this group", 400
+
+    record.parent_company_id = None
+    db.session.flush()
+    remaining = DiscoveryLead.query.filter_by(parent_company_id=group.id).count()
+    if remaining == 0:
+        db.session.delete(group)
+    db.session.commit()
+    return redirect("/discovery?group_result=removed")
+
+
+@app.route("/discovery/groups/<int:group_id>/assign", methods=["POST"])
+def assign_discovery_company_group(group_id):
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    group = DiscoveryCompanyGroup.query.get_or_404(group_id)
+    if group.assigned_to:
+        return redirect("/discovery?group_result=already_assigned")
+
+    assigned_to_raw = str(request.form.get("assigned_to") or "").strip()
+    if not assigned_to_raw.isdigit():
+        return redirect("/discovery?group_result=assignment_required")
+
+    assigned_user = User.query.filter(
+        User.id == int(assigned_to_raw),
+        User.role.in_(["agent", "admin", "developer"])
+    ).first()
+    if not assigned_user:
+        return redirect("/discovery?group_result=invalid_assignment")
+
+    members = DiscoveryLead.query.filter_by(parent_company_id=group.id).order_by(DiscoveryLead.id.asc()).all()
+    if not members:
+        return redirect("/discovery?group_result=empty")
+
+    contact_lines = []
+    urls = []
+    cities = []
+    primary_phone = ""
+    for member in members:
+        if member.city and member.city not in cities:
+            cities.append(member.city)
+        if member.url:
+            urls.append(member.url)
+        if member.phone and not primary_phone:
+            primary_phone = member.phone
+        contact_lines.append(
+            f"- {member.title} | {member.city or 'UAE'} | {member.phone or 'No phone'}"
+            + (f" | {member.url}" if member.url else "")
+        )
+
+    notes = (
+        f"Discovery Company Group ID: {group.id}\n"
+        f"Associated records: {len(members)}\n\n"
+        + "\n".join(contact_lines)
+    )
+    lead = Lead(
+        name=group.name,
+        phone=primary_phone,
+        email="",
+        city=", ".join(cities) or "UAE",
+        source="Discovery Group",
+        status="NEW",
+        notes=notes,
+        assigned_to=assigned_user.id,
+        created_at=datetime.utcnow()
+    )
+    db.session.add(lead)
+    group.assigned_to = assigned_user.id
+    group.status = "ASSIGNED"
+    db.session.commit()
+    return redirect("/discovery?group_result=assigned")
+
 
 # =========================================================
 # CRAIGSLIST BACKGROUND SCAN
@@ -2232,6 +2396,14 @@ with app.app_context():
 
     ]
 
+
+    # Add parent company relation if missing
+    if "parent_company_id" not in discovery_lead_columns:
+        with db.engine.connect() as connection:
+            connection.execute(text(
+                "ALTER TABLE discovery_lead ADD COLUMN parent_company_id INTEGER"
+            ))
+            connection.commit()
 
     # Add phone if missing
     if "phone" not in discovery_lead_columns:

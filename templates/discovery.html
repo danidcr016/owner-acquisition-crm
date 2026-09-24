@@ -10,6 +10,9 @@
 .discovery-action-btn{width:72px;height:32px;padding:4px 6px;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;font-size:.75rem;font-weight:600;line-height:1}
 .discovery-action-btn i{font-size:.75rem}
 .discovery-action-column{min-width:365px;width:365px}
+.group-card{border-left:5px solid #0d6efd}
+.group-member{background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px}
+.group-select-col{width:42px;text-align:center}
 </style>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -90,6 +93,12 @@
     </div>
 </div>
 
+<div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><small class="text-muted">Company groups</small><h3 class="mb-0">{{ total_company_groups }}</h3></div></div></div>
+    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><small class="text-muted">Grouped records</small><h3 class="mb-0">{{ grouped_records }}</h3></div></div></div>
+    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body"><small class="text-muted">Ungrouped records</small><h3 class="mb-0">{{ ungrouped_records }}</h3></div></div></div>
+</div>
+
 <div id="discovery-page" data-scan-running="{{ 'true' if scan_running else 'false' }}">
 {% if request.args.get("deleted") is not none %}
 <div class="alert alert-success mb-4" role="status">
@@ -119,6 +128,10 @@
     The agency could not be added to Leads. No changes were saved.
 </div>
 {% endif %}
+{% if request.args.get("group_result") == "created" %}<div class="alert alert-success">Company group created successfully.</div>{% endif %}
+{% if request.args.get("group_result") == "removed" %}<div class="alert alert-success">The record was removed from the company group.</div>{% endif %}
+{% if request.args.get("group_result") == "assigned" %}<div class="alert alert-success">The company group was assigned as one commercial lead.</div>{% endif %}
+{% if request.args.get("group_result") in ["invalid", "assignment_required", "invalid_assignment", "empty"] %}<div class="alert alert-warning">The company group action could not be completed. Check the selection and assigned user.</div>{% endif %}
 <div id="scan-feedback" class="alert alert-info d-none mb-4" role="status" aria-live="polite"></div>
 
 <div class="d-flex gap-2 mb-4">
@@ -142,6 +155,57 @@
         </button>
     </form>
 </div>
+
+{% if company_groups %}
+<div class="mb-4">
+    <h3 class="h5 mb-3"><i class="bi bi-diagram-3-fill"></i> Company groups</h3>
+    {% for group in company_groups %}
+    <div class="card shadow-sm group-card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h4 class="h5 mb-1">{{ group.name }}</h4>
+                    <div class="text-muted small">
+                        {{ group.members|length }} records / branches
+                        {% if group.assigned_user %} · Assigned to <strong>{{ group.assigned_user.username }}</strong>{% endif %}
+                    </div>
+                </div>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    {% if not group.assigned_user %}
+                    <form action="/discovery/groups/{{ group.id }}/assign" method="POST" class="d-flex gap-2">
+                        <select name="assigned_to" required class="form-select form-select-sm" style="width:140px;">
+                            <option value="">Assign to...</option>
+                            {% for agent in agents %}<option value="{{ agent.id }}">{{ agent.username }}</option>{% endfor %}
+                        </select>
+                        <button class="btn btn-sm btn-success" type="submit"><i class="bi bi-person-check-fill"></i> Assign group</button>
+                    </form>
+                    {% else %}<span class="badge bg-primary">{{ group.status }}</span>{% endif %}
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#group-{{ group.id }}">View contacts</button>
+                </div>
+            </div>
+            <div class="collapse mt-3" id="group-{{ group.id }}">
+                {% for member in group.members %}
+                <div class="group-member d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
+                        <strong>{{ member.title }}</strong><br>
+                        <span class="text-muted">{{ member.city or 'UAE' }} · {{ member.phone or 'No phone' }}</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        {% if member.url %}<a href="{{ member.url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">Open</a>{% endif %}
+                        {% if not group.assigned_user %}
+                        <form action="/discovery/groups/{{ group.id }}/remove/{{ member.id }}" method="POST" onsubmit="return confirm('Remove this record from the company group?');">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Remove from group</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 <div class="card shadow-sm mb-4">
     <div class="card-body">
@@ -196,10 +260,17 @@
 <div class="card shadow">
     <div class="card-body">
         {% if opportunities %}
+        <form action="/discovery/groups/create" method="POST" id="create-group-form">
+            <div class="d-flex gap-2 align-items-end mb-3 flex-wrap">
+                <div><label class="form-label mb-1" for="group_name">Parent company name</label><input id="group_name" name="group_name" class="form-control" placeholder="Example: Metropolitan Premium Properties" required></div>
+                <button class="btn btn-primary" type="submit"><i class="bi bi-diagram-3-fill"></i> Group selected records</button>
+                <small class="text-muted">Select at least two ungrouped records below.</small>
+            </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
+                        <th class="group-select-col"><input type="checkbox" id="select-all-records" title="Select all on this page"></th>
                         <th>Title</th><th>Description</th><th>City</th><th>Source</th>
                         <th>Contact</th><th>Score</th><th>Date</th><th class="discovery-action-column">Action</th>
                     </tr>
@@ -207,6 +278,7 @@
                 <tbody>
                     {% for item in opportunities %}
                     <tr>
+                        <td class="group-select-col"><input type="checkbox" name="selected_records" value="{{ item.id }}" class="group-record-checkbox"></td>
                         <td>
                             <strong>{{ item.title }}</strong>
                             {% if item.is_short_term %}
@@ -286,6 +358,7 @@
                 </tbody>
             </table>
         </div>
+        </form>
         {% if pagination.pages > 1 %}
         <nav class="mt-4" aria-label="Discovery pagination">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -404,5 +477,15 @@
     }
     window.addEventListener("beforeunload", () => window.clearTimeout(pollTimer));
 })();
+
+document.getElementById("select-all-records")?.addEventListener("change", function () {
+    document.querySelectorAll(".group-record-checkbox").forEach((box) => { box.checked = this.checked; });
+});
+document.getElementById("create-group-form")?.addEventListener("submit", function (event) {
+    if (document.querySelectorAll(".group-record-checkbox:checked").length < 2) {
+        event.preventDefault();
+        alert("Select at least two records to create a company group.");
+    }
+});
 </script>
 {% endblock %}
