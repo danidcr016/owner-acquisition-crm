@@ -1817,7 +1817,6 @@ def discovery():
     sort_by = request.args.get("sort", "short_term_first").strip()
     contact_filter = request.args.get("contact", "all").strip()
     agency_type = request.args.get("agency_type", "all").strip()
-    listings_filter = request.args.get("active_listings", "all").strip()
     page = max(request.args.get("page", 1, type=int) or 1, 1)
 
     query = DiscoveryLead.query
@@ -1839,28 +1838,6 @@ def discovery():
     records = query.all()
     groups = group_discovery_records(records)
 
-    listing_ranges = {
-        "1_10": (1, 10),
-        "11_25": (11, 25),
-        "26_50": (26, 50),
-        "51_100": (51, 100),
-        "101_250": (101, 250),
-        "251_500": (251, 500),
-        "500_plus": (501, None),
-    }
-    if listings_filter == "unknown":
-        groups = [item for item in groups if item.active_listings is None]
-    elif listings_filter in listing_ranges:
-        minimum, maximum = listing_ranges[listings_filter]
-        groups = [
-            item for item in groups
-            if item.active_listings is not None
-            and item.active_listings >= minimum
-            and (maximum is None or item.active_listings <= maximum)
-        ]
-    else:
-        listings_filter = "all"
-
     def group_sort_value(item):
         members = item.related_records
         has_short_term = any(bool(row.is_short_term) for row in members)
@@ -1871,11 +1848,16 @@ def discovery():
         if sort_by == "newest": return (newest, item.id)
         if sort_by == "oldest": return (oldest, item.id)
         if sort_by == "score_high": return (best_score, newest)
+        active_listings = item.active_listings
         if sort_by == "score_low": return (-best_score, newest)
+        if sort_by == "active_listings_high":
+            return (active_listings is not None, active_listings if active_listings is not None else -1, newest)
+        if sort_by == "active_listings_low":
+            return (active_listings is None, active_listings if active_listings is not None else 10**12, newest)
         if sort_by == "phone_first": return (has_phone, best_score, newest)
         return (has_short_term, has_phone, best_score, newest)
 
-    reverse = sort_by not in {"oldest", "score_low"}
+    reverse = sort_by not in {"oldest", "score_low", "active_listings_low"}
     groups.sort(key=group_sort_value, reverse=reverse)
     per_page = 25
     total_groups = len(groups)
@@ -1896,7 +1878,6 @@ def discovery():
         sort_by=sort_by,
         contact_filter=contact_filter,
         agency_type=agency_type,
-        listings_filter=listings_filter,
         current_user=user,
         agents=get_agents(),
         scan_running=craigslist_scan_status["running"],
