@@ -431,6 +431,14 @@ Leads - Owner Acquisition CRM
                                 <i class="bi bi-info-circle-fill"></i>
                                 Info
                             </button>
+                            <a
+                                href="{{ url_for('add_follow_up', lead_id=lead.id) }}"
+                                class="btn btn-sm btn-outline-success"
+                                title="Create Follow-Up"
+                            >
+                                <i class="bi bi-calendar-plus-fill"></i>
+                                Follow-Up
+                            </a>
 
 
                                 <!-- CHANGE STATUS -->

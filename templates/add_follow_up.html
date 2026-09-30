@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-Nuevo Follow-Up - Owner Acquisition CRM
+New Follow-Up - Owner Acquisition CRM
 {% endblock %}
 
 {% block content %}
@@ -20,13 +20,13 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
             <i class="bi bi-calendar-plus-fill"></i>
 
-            Nuevo Follow-Up
+            New Follow-Up
 
         </h1>
 
         <p class="text-muted mb-0">
 
-            Programa una llamada, email, WhatsApp o tarea.
+            Schedule a call, email, WhatsApp message or another follow-up task.
 
         </p>
 
@@ -34,13 +34,13 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
 
     <a
-        href="/follow-ups"
+        href="{{ url_for('leads', search=selected_lead.name) if selected_lead else url_for('follow_ups') }}"
         class="btn btn-secondary"
     >
 
         <i class="bi bi-arrow-left"></i>
 
-        Volver
+        Back
 
     </a>
 
@@ -75,32 +75,24 @@ Nuevo Follow-Up - Owner Acquisition CRM
         Lead
     </label>
 
-    <select
-        id="lead_id"
-        name="lead_id"
-        class="form-select"
-        required
-    >
-
-        <option value="">
-            Selecciona un propietario
-        </option>
-
+    {% if selected_lead %}
+    <input type="hidden" name="lead_id" value="{{ selected_lead.id }}">
+    <div class="form-control bg-light">
+        <strong>{{ selected_lead.name }}</strong>
+        {% if selected_lead.city %} — {{ selected_lead.city }}{% endif %}
+        {% if selected_lead.phone %} — {{ selected_lead.phone }}{% endif %}
+    </div>
+    <div class="form-text">This Follow-Up will be created for the selected Lead.</div>
+    {% else %}
+    <select id="lead_id" name="lead_id" class="form-select" required>
+        <option value="">Select a Lead</option>
         {% for lead in leads %}
-
-            <option value="{{ lead.id }}">
-                {{ lead.name }}
-                {% if lead.city %}
-                    — {{ lead.city }}
-                {% endif %}
-                {% if lead.phone %}
-                    — {{ lead.phone }}
-                {% endif %}
-            </option>
-
+        <option value="{{ lead.id }}">
+            {{ lead.name }}{% if lead.city %} — {{ lead.city }}{% endif %}{% if lead.phone %} — {{ lead.phone }}{% endif %}
+        </option>
         {% endfor %}
-
     </select>
+    {% endif %}
 
 </div>
 
@@ -115,7 +107,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
                     <i class="bi bi-list-check"></i>
 
-                    Tipo de Follow-Up
+                    Follow-Up Type
 
                 </label>
 
@@ -128,7 +120,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
                 >
 
                     <option value="">
-                        Selecciona un tipo
+                        Select a type
                     </option>
 
 
@@ -190,7 +182,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
                     <i class="bi bi-pencil-fill"></i>
 
-                    Título
+                    Title
 
                 </label>
 
@@ -219,7 +211,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
                     <i class="bi bi-calendar-event-fill"></i>
 
-                    Fecha y hora
+                    Due date and time
 
                 </label>
 
@@ -246,7 +238,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
                     <i class="bi bi-journal-text"></i>
 
-                    Notas
+                    Notes
 
                 </label>
 
@@ -256,7 +248,7 @@ Nuevo Follow-Up - Owner Acquisition CRM
                     name="notes"
                     class="form-control"
                     rows="4"
-                    placeholder="Información adicional sobre este follow-up..."
+                    placeholder="Additional information about this follow-up..."
                 ></textarea>
 
             </div>
@@ -274,17 +266,17 @@ Nuevo Follow-Up - Owner Acquisition CRM
 
                     <i class="bi bi-check-lg"></i>
 
-                    Crear Follow-Up
+                    Create Follow-Up
 
                 </button>
 
 
                 <a
-                    href="/follow-ups"
+                    href="{{ url_for('leads', search=selected_lead.name) if selected_lead else url_for('follow_ups') }}"
                     class="btn btn-outline-secondary"
                 >
 
-                    Cancelar
+                    Cancel
 
                 </a>
 
@@ -311,23 +303,16 @@ Nuevo Follow-Up - Owner Acquisition CRM
 <script>
 
 document.addEventListener("DOMContentLoaded", function () {
+    const leadSelect = document.getElementById("lead_id");
+    if (!leadSelect) return;
 
-    new TomSelect("#lead_id", {
-
-        placeholder: "Buscar propietario...",
-
-        searchField: [
-            "text"
-        ],
-
+    new TomSelect(leadSelect, {
+        placeholder: "Search Leads...",
+        searchField: ["text"],
         maxOptions: 100,
-
         create: false,
-
         allowEmptyOption: true
-
     });
-
 });
 
 </script>

@@ -1512,6 +1512,16 @@ def add_follow_up():
         ).all()
 
 
+    selected_lead = None
+    requested_lead_id = request.args.get("lead_id", type=int)
+
+    if request.method == "GET" and requested_lead_id:
+        selected_lead = db.session.get(Lead, requested_lead_id)
+        if selected_lead is None:
+            return "Lead not found", 404
+        if not can_access_lead(selected_lead):
+            return "Access denied", 403
+
     if request.method == "POST":
 
         lead_id = int(
@@ -1566,6 +1576,8 @@ def add_follow_up():
         "add_follow_up.html",
 
         leads=leads,
+
+        selected_lead=selected_lead,
 
         current_user=user
 
