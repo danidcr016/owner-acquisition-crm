@@ -1455,6 +1455,11 @@ def follow_ups():
         ).all()
 
 
+    for follow_up in all_follow_ups:
+        follow_up.lead.associated_contacts = extract_discovery_group_data(
+            follow_up.lead.notes
+        )
+
     return render_template(
 
         "follow_ups.html",

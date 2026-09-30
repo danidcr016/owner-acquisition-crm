@@ -26,15 +26,7 @@ Follow-Ups - Owner Acquisition CRM
 
 <div class="d-flex gap-2">
 
-    {% if current_user.role in ["admin", "developer"] %}
-    <a href="/" class="btn btn-secondary">
-        <i class="bi bi-house-fill"></i> Dashboard
-    </a>
-    {% else %}
-    <a href="/leads" class="btn btn-secondary">
-        <i class="bi bi-people-fill"></i> View Leads
-    </a>
-    {% endif %}
+    {% if current_user.role in ["admin", "developer"] %}<a href="/" class="btn btn-secondary"><i class="bi bi-house-fill"></i> Dashboard</a>{% else %}<a href="/leads" class="btn btn-secondary"><i class="bi bi-people-fill"></i> View Leads</a>{% endif %}
 
 
     <a
@@ -155,6 +147,7 @@ Follow-Ups - Owner Acquisition CRM
                     <th>
                         Lead
                     </th>
+                    <th>Phone</th>
 
                     <th>
                         Due date
@@ -291,13 +284,8 @@ Follow-Ups - Owner Acquisition CRM
                     <!-- LEAD -->
 
                     <td>
-                        {% if current_user.role in ["admin", "developer"] %}
-                        <a href="/edit-lead/{{ follow_up.lead.id }}" class="text-decoration-none">
-                            <strong>{{ follow_up.lead.name }}</strong>
-                        </a>
-                        {% else %}
-                        <strong>{{ follow_up.lead.name }}</strong>
-                        {% endif %}
+
+                        {% if current_user.role in ["admin", "developer"] %}<a href="/edit-lead/{{ follow_up.lead.id }}" class="text-decoration-none"><strong>{{ follow_up.lead.name }}</strong></a>{% else %}<strong>{{ follow_up.lead.name }}</strong>{% endif %}
 
 
                         {% if follow_up.lead.city %}
@@ -312,6 +300,9 @@ Follow-Ups - Owner Acquisition CRM
 
                     </td>
 
+
+                    <!-- PHONE -->
+                    <td>{% if follow_up.lead.phone %}<a href="tel:{{ follow_up.lead.phone }}" class="text-decoration-none fw-semibold"><i class="bi bi-telephone-fill"></i> {{ follow_up.lead.phone }}</a>{% else %}<span class="text-muted">No phone</span>{% endif %}</td>
 
                     <!-- DATE -->
 
@@ -361,6 +352,7 @@ Follow-Ups - Owner Acquisition CRM
                     <td>
 
                         <div class="d-flex gap-2 justify-content-center">
+                            <button type="button" class="btn btn-sm btn-outline-info" title="View lead information" data-bs-toggle="modal" data-bs-target="#followUpInfoModal{{ follow_up.id }}"><i class="bi bi-info-circle-fill"></i></button>
 
                             <a
                                 href="/edit-follow-up/{{ follow_up.id }}"
