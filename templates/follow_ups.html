@@ -18,7 +18,7 @@ Follow-Ups - Owner Acquisition CRM
     </h1>
 
     <p class="text-muted mb-0">
-        Gestiona llamadas, emails, WhatsApp y otras tareas.
+        Manage calls, emails, WhatsApp messages and other follow-up tasks.
     </p>
 
 </div>
@@ -26,13 +26,15 @@ Follow-Ups - Owner Acquisition CRM
 
 <div class="d-flex gap-2">
 
-    <a
-        href="/"
-        class="btn btn-secondary"
-    >
-        <i class="bi bi-house-fill"></i>
-        Dashboard
+    {% if current_user.role in ["admin", "developer"] %}
+    <a href="/" class="btn btn-secondary">
+        <i class="bi bi-house-fill"></i> Dashboard
     </a>
+    {% else %}
+    <a href="/leads" class="btn btn-secondary">
+        <i class="bi bi-people-fill"></i> View Leads
+    </a>
+    {% endif %}
 
 
     <a
@@ -40,7 +42,7 @@ Follow-Ups - Owner Acquisition CRM
         class="btn btn-primary"
     >
         <i class="bi bi-plus-lg"></i>
-        Nuevo Follow-Up
+        New Follow-Up
     </a>
 
 </div>
@@ -143,7 +145,7 @@ Follow-Ups - Owner Acquisition CRM
                 <tr>
 
                     <th>
-                        Tipo
+                        Type
                     </th>
 
                     <th>
@@ -155,15 +157,15 @@ Follow-Ups - Owner Acquisition CRM
                     </th>
 
                     <th>
-                        Fecha
+                        Due date
                     </th>
 
                     <th>
-                        Estado
+                        Status
                     </th>
 
                     <th class="text-center">
-                        Acciones
+                        Actions
                     </th>
 
                 </tr>
@@ -289,17 +291,13 @@ Follow-Ups - Owner Acquisition CRM
                     <!-- LEAD -->
 
                     <td>
-
-                        <a
-                            href="/edit-lead/{{ follow_up.lead.id }}"
-                            class="text-decoration-none"
-                        >
-
-                            <strong>
-                                {{ follow_up.lead.name }}
-                            </strong>
-
+                        {% if current_user.role in ["admin", "developer"] %}
+                        <a href="/edit-lead/{{ follow_up.lead.id }}" class="text-decoration-none">
+                            <strong>{{ follow_up.lead.name }}</strong>
                         </a>
+                        {% else %}
+                        <strong>{{ follow_up.lead.name }}</strong>
+                        {% endif %}
 
 
                         {% if follow_up.lead.city %}
@@ -411,7 +409,7 @@ Follow-Ups - Owner Acquisition CRM
                             <a
                                 href="/delete-follow-up/{{ follow_up.id }}"
                                 class="btn btn-sm btn-danger"
-                                title="Eliminar follow-up"
+                                title="Delete follow-up"
                                 onclick="return confirm('¿Seguro que quieres eliminar este follow-up?');"
                             >
                                 <i class="bi bi-trash-fill"></i>
@@ -459,7 +457,7 @@ Follow-Ups - Owner Acquisition CRM
 
 
         <p class="text-muted">
-            Crea tu primer seguimiento para empezar.
+            Create your first follow-up to get started.
         </p>
 
 
@@ -470,7 +468,7 @@ Follow-Ups - Owner Acquisition CRM
 
             <i class="bi bi-plus-lg"></i>
 
-            Crear Follow-Up
+            Create Follow-Up
 
         </a>
 

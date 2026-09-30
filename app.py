@@ -1425,11 +1425,6 @@ def follow_ups():
     if not session.get("logged_in"):
         return redirect("/login")
 
-    if not is_admin_or_developer():
-
-        return "Access denied", 403
-
-
     user = current_user()
 
 
@@ -1483,11 +1478,6 @@ def add_follow_up():
 
     if not session.get("logged_in"):
         return redirect("/login")
-
-    if not is_admin_or_developer():
-
-        return "Access denied", 403
-
 
     user = current_user()
 
@@ -1589,11 +1579,6 @@ def edit_follow_up(id):
 
     if not session.get("logged_in"):
         return redirect("/login")
-
-    if not is_admin_or_developer():
-
-        return "Access denied", 403
-
 
     user = current_user()
 
@@ -1704,11 +1689,6 @@ def complete_follow_up(id):
     if not session.get("logged_in"):
         return redirect("/login")
 
-    if not is_admin_or_developer():
-
-        return "Access denied", 403
-
-
     follow_up = FollowUp.query.get_or_404(
         id
     )
@@ -1741,11 +1721,6 @@ def reopen_follow_up(id):
 
     if not session.get("logged_in"):
         return redirect("/login")
-
-    if not is_admin_or_developer():
-
-        return "Access denied", 403
-
 
     follow_up = FollowUp.query.get_or_404(
         id

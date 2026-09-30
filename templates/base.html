@@ -19,6 +19,7 @@
             <nav class="app-nav" aria-label="Main navigation">
                 {% if session.get("role") == "agent" %}
                 <a href="/leads" class="nav-link"><i class="bi bi-people"></i><span>View Leads</span></a>
+                <a href="/follow-ups" class="nav-link"><i class="bi bi-calendar-check"></i><span>Follow-Ups</span></a>
                 {% else %}
                 <a href="/" class="nav-link"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
                 <a href="/leads" class="nav-link"><i class="bi bi-people"></i><span>View Leads</span></a>
@@ -38,7 +39,7 @@
                         <div><strong>{{ session.get("username", "User") }}</strong><small>{{ session.get("role", "Account") }}</small></div>
                     </div>
                     <hr>
-                    {% if session.get("role") == "agent" %}<a href="/leads" class="dropdown-link"><i class="bi bi-people"></i>View Leads</a>{% else %}<a href="/" class="dropdown-link"><i class="bi bi-grid"></i>Dashboard</a>{% endif %}
+                    {% if session.get("role") == "agent" %}<a href="/leads" class="dropdown-link"><i class="bi bi-people"></i>View Leads</a><a href="/follow-ups" class="dropdown-link"><i class="bi bi-calendar-check"></i>Follow-Ups</a>{% else %}<a href="/" class="dropdown-link"><i class="bi bi-grid"></i>Dashboard</a>{% endif %}
                     <a href="/logout" class="logout-button"><i class="bi bi-box-arrow-right"></i>Log out</a>
                 </div>
             </div>
