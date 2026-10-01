@@ -542,6 +542,34 @@ def extract_discovery_group_data(notes):
         return []
 
 
+def lead_active_listings(lead):
+    """Return the highest known Property Finder active-listing count."""
+    values = []
+    for contact in extract_discovery_group_data(getattr(lead, "notes", None)):
+        value = extract_active_listings(contact.get("description"))
+        if value is not None:
+            values.append(value)
+    direct_value = extract_active_listings(getattr(lead, "notes", None))
+    if direct_value is not None:
+        values.append(direct_value)
+    return max(values) if values else None
+
+
+def agency_size_from_listings(active_listings):
+    if active_listings is None:
+        return None
+    if active_listings <= 20:
+        return "Small agency"
+    if active_listings <= 100:
+        return "Medium agency"
+    return "Large agency"
+
+
+def enrich_lead_with_listing_data(lead):
+    lead.active_listings = lead_active_listings(lead)
+    lead.agency_size = agency_size_from_listings(lead.active_listings)
+
+
 class GroupPagination:
     def __init__(self, items, page, per_page, total):
         self.items = items
@@ -1082,6 +1110,7 @@ def leads():
     all_leads = query.all()
     for lead_item in all_leads:
         lead_item.associated_contacts = extract_discovery_group_data(lead_item.notes)
+        enrich_lead_with_listing_data(lead_item)
 
 
     if user.role in [
@@ -1459,6 +1488,7 @@ def follow_ups():
         follow_up.lead.associated_contacts = extract_discovery_group_data(
             follow_up.lead.notes
         )
+        enrich_lead_with_listing_data(follow_up.lead)
 
     return render_template(
 

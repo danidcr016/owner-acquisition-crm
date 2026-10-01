@@ -323,6 +323,14 @@ Leads - Owner Acquisition CRM
                             <strong>
                                 {{ lead.name }}
                             </strong>
+                            <div class="mt-1">
+                                {% if lead.active_listings is not none %}
+                                    <span class="badge bg-dark"><i class="bi bi-buildings-fill"></i> {{ lead.active_listings }} active listings</span>
+                                    <span class="badge bg-light text-secondary border">{{ lead.agency_size }}</span>
+                                {% else %}
+                                    <span class="small text-muted">Listing count not available</span>
+                                {% endif %}
+                            </div>
 
                         </td>
 
@@ -696,6 +704,10 @@ Leads - Owner Acquisition CRM
                             {% endif %}
                         </p>
 
+                        <p>
+                            <strong><i class="bi bi-buildings-fill"></i> Active listings:</strong><br>
+                            {% if lead.active_listings is not none %}{{ lead.active_listings }} · {{ lead.agency_size }}{% else %}Listing count not available{% endif %}
+                        </p>
                         <p>
                             <strong>📅 Created:</strong><br>
 

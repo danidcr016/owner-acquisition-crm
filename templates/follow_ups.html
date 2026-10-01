@@ -319,7 +319,16 @@ Follow-Ups - Owner Acquisition CRM
 
                         {% endif %}
 
-                    </td>
+                    
+                        <div class="mt-1">
+                            {% if follow_up.lead.active_listings is not none %}
+                                <span class="badge bg-dark"><i class="bi bi-buildings-fill"></i> {{ follow_up.lead.active_listings }} active listings</span>
+                                <span class="badge bg-light text-secondary border">{{ follow_up.lead.agency_size }}</span>
+                            {% else %}
+                                <small class="text-muted d-block">Listing count not available</small>
+                            {% endif %}
+                        </div>
+</td>
 
 
                     <!-- PHONE -->
@@ -537,6 +546,10 @@ Follow-Ups - Owner Acquisition CRM
             <div class="col-md-6">
                 <small class="text-muted d-block">Assigned to</small>
                 <span>{{ follow_up.lead.assigned_user.username if follow_up.lead.assigned_user else 'Unassigned' }}</span>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted d-block">Active listings</small>
+                {% if follow_up.lead.active_listings is not none %}<span>{{ follow_up.lead.active_listings }} · {{ follow_up.lead.agency_size }}</span>{% else %}<span class="text-muted">Listing count not available</span>{% endif %}
             </div>
         </div>
 
