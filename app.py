@@ -4,6 +4,10 @@ import json
 import math
 import secrets
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import requests
+from bs4 import BeautifulSoup
 
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
@@ -177,6 +181,11 @@ class Lead(db.Model):
 
     notes = db.Column(
         db.Text
+    )
+
+    active_listings = db.Column(
+        db.Integer,
+        nullable=True
     )
 
     created_at = db.Column(
@@ -544,16 +553,90 @@ def extract_discovery_group_data(notes):
 
 def lead_active_listings(lead):
     """Return the highest known Property Finder active-listing count."""
+    stored_value = getattr(lead, "active_listings", None)
+    if stored_value is not None:
+        return stored_value
+
     values = []
     for contact in extract_discovery_group_data(getattr(lead, "notes", None)):
         value = extract_active_listings(contact.get("description"))
         if value is not None:
             values.append(value)
+
     direct_value = extract_active_listings(getattr(lead, "notes", None))
     if direct_value is not None:
         values.append(direct_value)
+
     return max(values) if values else None
 
+
+def normalize_phone(value):
+    return re.sub(r"\D+", "", str(value or ""))
+
+
+def normalize_company_name(value):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).split())
+
+
+def propertyfinder_urls_from_lead(lead):
+    urls = []
+    for contact in extract_discovery_group_data(getattr(lead, "notes", None)):
+        url = str(contact.get("url") or "").strip()
+        if "propertyfinder.ae" in url and url not in urls:
+            urls.append(url)
+    for match in re.findall(r"https?://[^\s]+", str(getattr(lead, "notes", "") or "")):
+        url = match.rstrip(".,);]")
+        if "propertyfinder.ae" in url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _find_property_count_in_payload(payload):
+    priority_keys = (
+        "totalProperties", "activeListingsCount", "propertiesCount",
+        "propertiesResidentialForRentCount",
+    )
+    found = {key: [] for key in priority_keys}
+    def walk(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in found and isinstance(child, (int, float)) and child >= 0:
+                    found[key].append(int(child))
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+    walk(payload)
+    for key in priority_keys:
+        if found[key]:
+            return max(found[key])
+    return None
+
+
+def fetch_propertyfinder_active_listings(url):
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        next_data = soup.find("script", id="__NEXT_DATA__")
+        if next_data and next_data.string:
+            count = _find_property_count_in_payload(json.loads(next_data.string))
+            if count is not None:
+                return count
+        for key in ("totalProperties", "activeListingsCount", "propertiesCount", "propertiesResidentialForRentCount"):
+            match = re.search(rf'"{key}"\s*:\s*(\d+)', response.text)
+            if match:
+                return int(match.group(1))
+    except Exception as exc:
+        print(f"Listing-count lookup failed for {url}: {exc!r}", flush=True)
+    return None
 
 def agency_size_from_listings(active_listings):
     if active_listings is None:
@@ -1144,6 +1227,77 @@ def leads():
         lead_suggestions=lead_suggestions
 
     )
+
+
+# =========================================================
+# BACKFILL ACTIVE LISTING COUNTS FOR EXISTING LEADS
+# =========================================================
+@app.route("/leads/update-missing-listing-counts", methods=["POST"])
+def update_missing_listing_counts():
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if not is_admin_or_developer():
+        return "Access denied", 403
+
+    missing_leads = Lead.query.filter(Lead.active_listings.is_(None)).all()
+    discovery_phone_counts = {}
+    discovery_name_counts = {}
+    for record in DiscoveryLead.query.all():
+        count = extract_active_listings(record.description)
+        if count is None:
+            continue
+        phone_key = normalize_phone(record.phone)
+        name_key = normalize_company_name(record.title)
+        if phone_key:
+            discovery_phone_counts[phone_key] = max(count, discovery_phone_counts.get(phone_key, 0))
+        if name_key:
+            discovery_name_counts[name_key] = max(count, discovery_name_counts.get(name_key, 0))
+
+    urls_by_lead = {}
+    all_urls = set()
+    updated = 0
+    for lead in missing_leads:
+        count = lead_active_listings(lead)
+        if count is None:
+            phone_key = normalize_phone(lead.phone)
+            name_key = normalize_company_name(lead.name)
+            count = discovery_phone_counts.get(phone_key) if phone_key else None
+            if count is None and name_key:
+                count = discovery_name_counts.get(name_key)
+        if count is not None:
+            lead.active_listings = count
+            updated += 1
+            continue
+        urls = propertyfinder_urls_from_lead(lead)
+        if urls:
+            urls_by_lead[lead.id] = urls
+            all_urls.update(urls)
+
+    url_counts = {}
+    if all_urls:
+        with ThreadPoolExecutor(max_workers=min(8, len(all_urls))) as executor:
+            futures = {executor.submit(fetch_propertyfinder_active_listings, url): url for url in all_urls}
+            for future in as_completed(futures):
+                url = futures[future]
+                try:
+                    url_counts[url] = future.result()
+                except Exception as exc:
+                    print(f"Listing-count worker failed for {url}: {exc!r}", flush=True)
+                    url_counts[url] = None
+
+    for lead in missing_leads:
+        if lead.active_listings is not None:
+            continue
+        values = [url_counts.get(url) for url in urls_by_lead.get(lead.id, [])]
+        values = [value for value in values if value is not None]
+        if values:
+            lead.active_listings = max(values)
+            updated += 1
+
+    db.session.commit()
+    remaining = Lead.query.filter(Lead.active_listings.is_(None)).count()
+    print(f"Historical listing-count update: updated={updated}, remaining={remaining}", flush=True)
+    return redirect(f"/leads?listing_update=complete&updated={updated}&remaining={remaining}")
 
 
 # =========================================================
@@ -2136,6 +2290,7 @@ def add_discovery_to_leads(id):
         source="Discovery",
         status="NEW",
         notes="\n".join(visible_notes) + "\nDISCOVERY_GROUP_DATA:" + json.dumps(group_data, ensure_ascii=False),
+        active_listings=group_active_listings(members),
         assigned_to=assigned_user.id,
         created_at=datetime.utcnow()
     )
@@ -2330,6 +2485,12 @@ with app.app_context():
 
             connection.commit()
 
+
+    # Add active_listings if missing
+    if "active_listings" not in lead_columns:
+        with db.engine.connect() as connection:
+            connection.execute(text("ALTER TABLE lead ADD COLUMN active_listings INTEGER"))
+            connection.commit()
 
     # Add assigned_to if missing
     if "assigned_to" not in lead_columns:
